@@ -1,0 +1,12 @@
+{
+  "name": "production-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production Scheduler with Google Sheets backend, hosted on Vercel",
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

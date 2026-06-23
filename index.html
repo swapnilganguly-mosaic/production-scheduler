@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Production Scheduler</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef2f8; --line:#d7deea;
+    --ink:#1b2536; --muted:#5d6b82; --accent:#2f6fed; --accent2:#1f9d6b;
+    --warn:#c67f10; --bad:#d33b4a; --good:#1f9d6b;
+    --p0:#d33b4a; --p1:#c67f10; --p2:#2f6fed; --p3:#6b788f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}
+  header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:12.5px;display:block;margin-top:3px}
+  .cm-pick{display:flex;flex-direction:column;gap:5px}
+  .cm-pick label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .cm-pick select{background:var(--panel2);border:1px solid var(--accent);color:var(--ink);border-radius:8px;padding:9px 12px;font:inherit;font-weight:650;min-width:200px}
+  /* sheet sync bar */
+  .sync-bar{display:flex;gap:8px;align-items:center;padding:8px 22px;background:var(--panel2);border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
+  .sync-bar .sync-status{color:var(--muted);min-width:220px}
+  .sync-bar .sync-status.ok{color:var(--good)} .sync-bar .sync-status.err{color:var(--bad)}
+  /* tab bar */
+  .tabs{display:flex;gap:2px;padding:0 22px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:13px 20px;font:inherit;font-weight:650;border-radius:0;cursor:pointer}
+  .tabs button .t-sub{display:block;font-size:11px;font-weight:400;margin-top:2px;color:var(--muted)}
+  .tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
+  .tabs button:hover{color:var(--ink)}
+  main{padding:18px 22px;max-width:1600px;margin:0 auto}
+  .tabpanel{display:none}
+  .tabpanel.active{display:block}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+  h2{font-size:14px;margin:0 0 12px;font-weight:650;letter-spacing:.02em}
+  h2 .hint{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+  .controls{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+  .ctl{display:flex;flex-direction:column;gap:5px}
+  .ctl label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .dfl{font-size:9.5px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;text-transform:none;letter-spacing:0;vertical-align:middle}
+  input[type=number],input[type=text],select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 9px;font:inherit;min-width:120px}
+  input[type=number]{width:120px}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:650;cursor:pointer}
+  button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line);font-weight:500}
+  button.save-btn{background:var(--accent2)}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.55;cursor:not-allowed;filter:none}
+  .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+  th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}
+  th:first-child,td:first-child,th.l,td.l{text-align:left}
+  thead th{position:sticky;top:0;background:var(--panel2);z-index:1;font-weight:600;color:var(--muted)}
+  tbody tr:hover{background:#eef3fb}
+  .inp-table td{padding:4px 6px}
+  .inp-table input,.inp-table select{min-width:0;width:100%;padding:5px 6px}
+  .inp-table input{width:96px;text-align:right}
+  .inp-table select{width:62px;text-align:left}
+  .inp-table input.calc{background:#eaf4ee;color:var(--accent2);font-weight:650;cursor:not-allowed}
+  .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+  .pill{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:650}
+  .P0{background:rgba(227,93,106,.18);color:var(--p0)} .P1{background:rgba(230,162,60,.18);color:var(--p1)}
+  .P2{background:rgba(91,157,255,.18);color:var(--p2)} .P3{background:rgba(123,138,166,.18);color:var(--p3)}
+  .muted{color:var(--muted)}
+  .num{font-variant-numeric:tabular-nums}
+  .bar{position:relative;height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;min-width:46px}
+  .bar > i{position:absolute;left:0;top:0;bottom:0;background:var(--accent2);border-radius:4px}
+  .bar.over > i{background:var(--bad)}
+  td.day{font-variant-numeric:tabular-nums}
+  td.day.z{color:#b7c0d0}
+  .warns{display:flex;flex-direction:column;gap:6px}
+  .warn-item{display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:6px 10px;border-radius:8px;background:var(--panel2)}
+  .tag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:5px}
+  .tag.shortfall,.tag.capacity_exceeded{background:rgba(227,93,106,.2);color:var(--bad)}
+  .tag.zero_target,.tag.missing_inputs,.tag.unknown_sku{background:rgba(230,162,60,.2);color:var(--warn)}
+  .kpis{display:flex;gap:22px;flex-wrap:wrap}
+  .kpi{display:flex;flex-direction:column}
+  .kpi b{font-size:20px;font-weight:680} .kpi span{font-size:11.5px;color:var(--muted)}
+  .totcol{border-left:1px solid var(--line);font-weight:650}
+  .footnote{color:var(--muted);font-size:11.5px;margin-top:10px}
+  .filter-in{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .filter-in input[type=text]{min-width:220px}
+  tfoot .tot-row td{font-weight:700;background:var(--panel2);border-top:2px solid var(--accent);position:sticky;bottom:0;z-index:1}
+  tfoot .tot-row .tot-val{color:var(--accent);font-variant-numeric:tabular-nums}
+  tfoot .tot-row .tot-lbl{color:var(--muted);font-size:11.5px;font-weight:600}
+  /* loading overlay */
+  #loadOverlay{position:fixed;inset:0;background:rgba(244,246,251,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:100;font-size:15px;font-weight:600;color:var(--muted)}
+  #loadOverlay .spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay shown while fetching from Google Sheets -->
+<div id="loadOverlay">
+  <div class="spinner"></div>
+  <span id="loadMsg">Loading data from Google Sheets…</span>
+</div>
+
+<header>
+  <div>
+    <h1>Production Scheduler</h1>
+    <span class="sub">TAB-1 Supply Planner inputs · TAB-2 capacitated scheduler · Target = priority × DRR · shared daily line · Google Sheets backend</span>
+  </div>
+  <div class="cm-pick">
+    <label for="cmSelect">Contract manufacturer</label>
+    <select id="cmSelect"></select>
+  </div>
+</header>
+
+<!-- Google Sheets sync bar -->
+<div class="sync-bar">
+  <button id="loadSheetBtn" class="ghost">↻ Reload from Sheet</button>
+  <button id="saveSheetBtn" class="save-btn">💾 Save to Sheet</button>
+  <span class="sync-status" id="syncStatus">Not synced yet</span>
+</div>
+
+<nav class="tabs">
+  <button data-tab="tab1" class="active">Production Planner<span class="t-sub">Inputs · supply plan M1 / M2</span></button>
+  <button data-tab="tab2">Scheduler<span class="t-sub">Run &amp; schedule</span></button>
+</nav>
+
+<main>
+  <!-- ============================ TAB 1 — SUPPLY PLANNER ============================ -->
+  <div id="tab1" class="tabpanel active">
+    <section>
+      <h2>Inputs Tab — Supply Planner <span class="hint">enter the production plan for M1 &amp; M2 · Tonnage = (pack size g × plan units) ÷ 10⁶</span></h2>
+      <div class="filter-in">
+        <input id="t1Filter" type="text" placeholder="Filter SKUs by code or name…">
+        <button class="ghost" id="importXlsxBtn">Import Excel (.xlsx)</button>
+        <button class="ghost" id="importCsv1Btn">Import CSV</button>
+        <button class="ghost" id="template1Btn">Download template (CSV)</button>
+        <input id="xlsxFile" type="file" accept=".xlsx" style="display:none">
+        <input id="csv1File" type="file" accept=".csv" style="display:none">
+        <span class="muted" id="t1Count"></span>
+        <button id="goTab2Btn" style="margin-left:auto">Open scheduler (TAB-2) ▶</button>
+      </div>
+      <div class="scroll" style="max-height:460px">
+        <table class="inp-table">
+          <thead><tr>
+            <th class="l">SKU Code</th><th class="l">SKU Name</th>
+            <th title="Pack size in grams">Pack Size (g)</th>
+            <th>Production Plan M1</th>
+            <th title="(Pack size g × plan units) ÷ 10⁶">Tonnage Plan M1</th>
+            <th>Production Plan M2</th>
+            <th title="(Pack size g × plan units) ÷ 10⁶">Tonnage Plan M2</th>
+          </tr></thead>
+          <tbody id="t1Body"></tbody>
+          <tfoot id="t1Foot"></tfoot>
+        </table>
+      </div>
+      <div class="footnote">
+        <b>Import Excel (.xlsx)</b> reads the workbook in-browser and matches rows by exact <b>SKU Code</b> — it fills any recognised columns it finds across all sheets
+        (Pack Size, Production Plan M1/M2, plus the scheduler columns on TAB-2). <b>Tonnage = (pack size grams × production plan units) ÷ 10⁶</b> (tonnes), computed live.
+        <b>Production Plan M1</b> flows through to TAB-2 as the <b>Monthly supply plan (X)</b>, which drives the <b>Balance to Go (X − Target)</b> column.
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================ TAB 2 — SCHEDULER ============================ -->
+  <div id="tab2" class="tabpanel">
+    <section>
+      <h2>Configuration</h2>
+      <input id="cfgCap" type="hidden" value="10000">
+      <input id="cfgMin" type="hidden" value="1000">
+      <input id="cfgMax" type="hidden" value="10000">
+      <div class="controls">
+        <div class="ctl"><label>Horizon (days)</label><input id="cfgHorizon" type="number" value="56" min="1" step="1"></div>
+        <div class="ctl"><label>Days / week</label><input id="cfgWeek" type="number" value="7" min="1" step="1"></div>
+        <div class="ctl"><label>Mode</label>
+          <select id="cfgMode"><option value="max_fill">max_fill</option><option value="uniform">uniform</option></select>
+        </div>
+        <div class="ctl"><label>&nbsp;</label><button id="runBtn">Run scheduler ▶</button></div>
+      </div>
+      <div class="footnote"><b>Line Cap</b>, <b>Min Cap</b> and <b>Max Cap</b> are <b>per-SKU</b> (see the columns in the table below — edit a row to override). The line stays <b>one shared line</b>: the engine schedules against a single shared cap equal to the largest per-SKU Line Cap. <b>Min Cap</b> = min-run guard, <b>Max Cap</b> = max units of a SKU per day.</div>
+    </section>
+
+    <section>
+      <h2>Scheduler inputs — <b id="cmTag"></b>
+        <span class="hint">edit DRR &amp; DOI · Priority from DOI (&lt;15→P0, 15–&lt;21→P1, 21–30→P2, &gt;30→P3) · Target Run QTY = P0/P3:10×DRR, P1/P2:15×DRR · Balance to Go = supply plan − target</span></h2>
+      <div class="filter-in">
+        <input id="t2Filter" type="text" placeholder="Filter SKUs by code or name…">
+        <button class="ghost" id="zeroBtn">Reset DRR to 0</button>
+        <button class="ghost" id="importCsv2Btn">Import CSV</button>
+        <button class="ghost" id="template2Btn">Download template (CSV)</button>
+        <input id="csv2File" type="file" accept=".csv" style="display:none">
+        <span class="muted" id="t2Count"></span>
+      </div>
+      <div class="scroll" style="max-height:420px">
+        <table class="inp-table">
+          <thead><tr>
+            <th class="l">SKU Code</th><th class="l">SKU Name</th>
+            <th class="l" title="Assign A/B/C">SKU Class</th>
+            <th>Current Stock</th>
+            <th>DRR</th><th>DOI</th>
+            <th class="l">Prod Priority</th>
+            <th title="Per-SKU view of the shared daily line">Line Cap</th>
+            <th title="Min-run guard for this SKU">Min Cap</th>
+            <th title="Max units of this SKU per day">Max Cap</th>
+            <th title="Y = P0/P3:10×DRR, P1/P2:15×DRR">Target Run QTY</th>
+            <th title="X = Production Plan M1 (from TAB-1)">Monthly supply plan</th>
+            <th title="X − Y">Balance to Go</th>
+          </tr></thead>
+          <tbody id="t2Body"></tbody>
+        </table>
+      </div>
+      <div class="footnote">CSV import matches rows by exact <b>SKU Code</b>; recognised columns: SKU Class, Current Stock, DRR, DOI, Line Cap, Min Cap, Max Cap (blank cap cells keep the seeded default). <b>Priority</b> is from the DOI band and <b>Target Run QTY</b> from priority × DRR — both computed (any Target/Priority columns in an import are ignored). <b>Monthly supply plan (X)</b> mirrors Production Plan M1 from TAB-1. Codes are never auto-corrected (note <span class="code">.B0_N</span> vs <span class="code">.BO_N</span>).</div>
+    </section>
+
+    <section id="summarySec" style="display:none">
+      <h2>Summary</h2>
+      <div class="kpis" id="kpis"></div>
+    </section>
+
+    <section id="warnSec" style="display:none">
+      <h2>Warnings</h2>
+      <div class="warns" id="warns"></div>
+    </section>
+
+    <section id="weeklySec" style="display:none">
+      <h2>Weekly schedule <span class="hint">units per SKU per week, sorted by priority</span>
+        <button class="ghost" style="float:right;padding:5px 10px" id="dlWeekly">Export CSV</button></h2>
+      <div class="scroll"><table id="weeklyTbl"></table></div>
+    </section>
+
+    <section id="daySec" style="display:none">
+      <h2>Day-wise schedule <span class="hint">D1…Dn per SKU · line utilisation bar per day</span>
+        <button class="ghost" style="float:right;padding:5px 10px" id="dlDay">Export CSV</button></h2>
+      <div class="scroll"><table id="dayTbl"></table></div>
+    </section>
+
+    <section id="shortSec" style="display:none">
+      <h2>Shortfalls <span class="hint">targets that could not be fully scheduled within the horizon</span></h2>
+      <div class="scroll"><table id="shortTbl"></table></div>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ============================================================================
+   CONTRACT MANUFACTURERS — base registry (names + fallback SKU list for Sapiens).
+   When Google Sheets data loads successfully, the .skus and .data fields are
+   replaced with live sheet data. This lets the app still work if the sheet is
+   temporarily unreachable.
+   ============================================================================ */
+
+const SAPIENS_SKUS = [
+  ["MWLJNTP.0003.B0_N","LJ NutriMix 2+ 350 gm Chocolate Jar"],
+  ["MWLJNTP.00027.B0_N","LJ NutriMix 2+ 350 gm Chocolate Pouch"],
+  ["MWLJNTP.00615.BO_N","Nutrimix 2+ Chocolate 200g Pouch"],
+  ["MWLJNTP.00507.B0_N","LJ NutriMix 2+ (Chocolate) - 1 kg"],
+  ["MWLJNTS.0001.B0_N","LJ NutriMix 2+ 20 g Chocolate Mini"],
+  ["MWLJNTP.00618.BO_N","LJ Nutrimix 2+ Pack of 6 - Chocolate"],
+  ["MWLJNTP.00483.B0_N","LJ NutriMix 2+ Belgian Chocolate - 350 g"],
+  ["MWLJNTK.00367.B0_N","LJ NutriMix Lite 2+ 350 gm Chocolate Jar"],
+  ["MWLJNTP.000836.B0_N","LJ Nutrimix 2+ Vanilla lite (350 gm)"],
+  ["MWLJNTP.00527.BO_N","LJ NutriMix 2+ Lite Vanilla 1Kg"],
+  ["MWLJNTP.00122.B0_N","LJ NutriMix 2+ 350 gm Vanilla Jar"],
+  ["MWLJNTP.00034.B0_N","LJ NutriMix 2+ 350 gm Strawberry Jar"],
+  ["MWLJNTS.0003.B0_N","LJ NutriMix 2+ 20 g Strawberry Mini"],
+  ["MWLJNTP.00699.B0_N","LJ NutriMix 2+ Unsweetened - 350 gm Pouch"],
+  ["MWLJNTP.000709.B0_N","LJ NutriMix 2+ Lite - 1 kg Pouch"],
+  ["MWLJNTP.00551.BO_N","LJ Nutrimix 2+ Pack of 6 - CSV"],
+  ["MWLJNTP.00059.B0_N","LJ NutriMix 7+ 350 gm Chocolate Jar"],
+  ["MWLJNTP.00423.B0_N","LJ NutriMix 7+ (Pouch) - 350g"],
+  ["MWLJNTP.00616.BO_N","Nutrimix 7+ Chocolate 200gm Pouch"],
+  ["MWLJNTP.00500.B0_N","LJ NutriMix 7+ (Chocolate) - 1kg"],
+  ["MWLJNTS.0006.BO_N","LJ NutriMix 7+ 20 g Chocolate Mini"],
+  ["MWLJNTP.00617.BO_N","LJ Nutrimix 7+ Pack of 6 - Chocolate"],
+  ["MWLJNTP.00698.B0_N","LJ NutriMix Lite 7+ 350 gm Chocolate Jar"],
+  ["MWLJNTP.00609.BO_N","LJ Nutrimix Lite 7+ Chocolate 1kg pouch"],
+  ["MWLJNTP.00177.B0_N","LJ NutriMix 7+ 350 gm Strawberry Jar"],
+  ["MWLJNTP.00636.B0_N","LJ NutriMix 7+ Vanilla 350 gm Jar"],
+  ["MWLJNTP.00608.BO_N","LJ Nutrimix Lite 7+ Vanilla 1 kg pouch"],
+  ["MWLJNTP.00610.BO_N","LJ Nutrimix Lite 7+ Vanilla 350 gm"],
+  ["MWLJNTP.00586.BO_N","LJ Nutrimix 7+ Pack of 6 - CSV"],
+  ["MWLJNTP.00126.B0_N","LJ NutriMix 13+ 350 gm Jar"],
+  ["MWLJNTP.00664.BO_N","Little Joys Nutrimix 13+ Vanilla Flavour 300g"],
+  ["MWLJNTP.00541.BO_N","LJ Nutrimix 13+ Chocolate 1 kg (Pack of 3)"],
+  ["MWLJNTP.00339.B0_N","LJ NutriMix for Mothers - 400 gm pouch - Chocolate"],
+  ["MWMMNTP.00207.AAAA.B0_N","MM Creatine Mixed Fruit Flavored"],
+  ["MWMMNTP.0035.AAAABO_N","MM Creatine Flavoured - Lemon"],
+  ["MWMMNTP.6348.AAAABO_N","MM Creatine Flavoured - Guava Chilli"],
+  ["MWLJNTP.00553.BO_N","LJ Multipurpose Nutrimix 250 gm"],
+  ["MWMMNTP.6356.AAAABO_N","MM Creatine Mango"],
+  ["MWMMNTP.6369.AAAABO_N","MM Creatine + Electrolyte Orange"],
+];
+
+const MANUFACTURERS = {
+  sapiens: { name: 'Sapiens', skus: SAPIENS_SKUS },
+};
+const DEFAULT_CM = 'sapiens';
+
+/* ============================================================================
+   GOOGLE SHEETS SYNC
+   ============================================================================ */
+function setSyncStatus(msg, cls=''){
+  const el=document.getElementById('syncStatus');
+  el.textContent=msg; el.className='sync-status '+(cls||'');
+}
+
+/**
+ * Load all SKU data from the Google Sheets API route.
+ * On success, replaces MANUFACTURERS data with live sheet values.
+ * On failure, keeps the hardcoded fallback and shows a warning.
+ */
+async function loadFromSheet(){
+  setSyncStatus('Loading from sheet…');
+  document.getElementById('loadSheetBtn').disabled=true;
+  document.getElementById('saveSheetBtn').disabled=true;
+  try {
+    const res  = await fetch('/api/sheet');
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const mfrs = data.manufacturers || {};
+
+    if(Object.keys(mfrs).length === 0){
+      setSyncStatus('Sheet is empty — showing fallback data. Add rows and reload.','');
+    } else {
+      // Merge sheet data into MANUFACTURERS
+      for(const [id, cm] of Object.entries(mfrs)){
+        if(!MANUFACTURERS[id]) MANUFACTURERS[id] = { name: id.charAt(0).toUpperCase()+id.slice(1) };
+        MANUFACTURERS[id].skus  = cm.skus.map(s=>[s.code, s.name]);
+        MANUFACTURERS[id].sheetData = cm.skus; // full row objects with all fields
+      }
+      const ts = new Date().toLocaleTimeString();
+      setSyncStatus(`Loaded ${Object.keys(mfrs).length} manufacturer(s) · ${ts}`, 'ok');
+    }
+  } catch(e){
+    console.warn('Could not load from sheet:', e);
+    setSyncStatus('Could not reach sheet — using fallback data. Check env vars.', 'err');
+  }
+
+  // Re-init dropdown + reload current manufacturer
+  initManufacturers();
+  loadManufacturer(currentCm);
+
+  document.getElementById('loadSheetBtn').disabled=false;
+  document.getElementById('saveSheetBtn').disabled=false;
+  document.getElementById('loadOverlay').style.display='none';
+}
+
+async function saveToSheet(){
+  const btn=document.getElementById('saveSheetBtn');
+  btn.textContent='Saving…'; btn.disabled=true;
+  setSyncStatus('Saving to sheet…');
+  try {
+    const skus=[...state.values()].map(r=>({
+      code:r.code, name:r.name,
+      packSize:r.packSize, prodM1:r.prodM1, prodM2:r.prodM2,
+      skuClass:r.skuClass, currentStock:r.currentStock,
+      drr:r.drr, doi:r.doi,
+      lineCap:r.lineCap, minCap:r.minCap, maxCap:r.maxCap,
+    }));
+    const res=await fetch('/api/sheet',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ manufacturer:currentCm, skus }),
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const ts=new Date().toLocaleTimeString();
+    setSyncStatus(`Saved ${data.updated||0} updated + ${data.added||0} new rows · ${ts}`, 'ok');
+    btn.textContent='✓ Saved';
+  } catch(e){
+    console.error('Save failed:', e);
+    setSyncStatus('Save failed: '+e.message, 'err');
+    btn.textContent='✗ Error';
+  }
+  setTimeout(()=>{ btn.textContent='💾 Save to Sheet'; btn.disabled=false; }, 2500);
+}
+
+document.getElementById('loadSheetBtn').addEventListener('click', loadFromSheet);
+document.getElementById('saveSheetBtn').addEventListener('click', saveToSheet);
+
+/* ============================================================================
+   ENGINE — identical to original
+   ============================================================================ */
+const PRIORITY_RANK = { P0:0, P1:1, P2:2, P3:3 };
+
+function weekCount(cfg){ return Math.ceil(cfg.horizonDays / cfg.daysPerWeek); }
+
+function sharedLineCapacity(skus, cfg){
+  let cap = -Infinity;
+  for(const s of skus){ if(typeof s.dailyLineCapacity==='number' && isFinite(s.dailyLineCapacity)) cap=Math.max(cap, s.dailyLineCapacity); }
+  return cap===-Infinity ? cfg.dailyLineCapacity : cap;
+}
+
+function orderSkus(skus){
+  return [...skus].sort((a,b)=>{
+    const pa = PRIORITY_RANK[a.priority] ?? Number.MAX_SAFE_INTEGER;
+    const pb = PRIORITY_RANK[b.priority] ?? Number.MAX_SAFE_INTEGER;
+    if(pa!==pb) return pa-pb;
+    if(b.target!==a.target) return b.target-a.target;
+    return a.code<b.code?-1:a.code>b.code?1:0;
+  });
+}
+
+function rollUpToWeeks(perDay, cfg){
+  const weeks = weekCount(cfg);
+  const perWeek = new Array(weeks).fill(0);
+  for(let day=0; day<perDay.length; day++){
+    const w = Math.floor(day/cfg.daysPerWeek);
+    perWeek[w] = (perWeek[w]||0) + (perDay[day]||0);
+  }
+  return perWeek;
+}
+
+function scheduleMaxFill(ordered, cfg){
+  const { dailyLineCapacity, horizonDays } = cfg;
+  const perDay = ordered.map(()=> new Array(horizonDays).fill(0));
+  let day = 0, capLeft = dailyLineCapacity;
+
+  for(let i=0;i<ordered.length;i++){
+    const maxPerSkuPerDay = ordered[i].maxPerSkuPerDay ?? cfg.maxPerSkuPerDay;
+    const minRun = ordered[i].minRun ?? cfg.minRun;
+    let remaining = Math.max(0, ordered[i].target);
+    while(remaining>0 && day<horizonDays){
+      if(capLeft<=0){ day++; capLeft=dailyLineCapacity; continue; }
+      const allocatedToday = perDay[i][day];
+      if(allocatedToday===0 && capLeft<minRun){ day++; capLeft=dailyLineCapacity; continue; }
+      const skuRoom = maxPerSkuPerDay - allocatedToday;
+      if(skuRoom<=0){ day++; capLeft=dailyLineCapacity; continue; }
+      const alloc = Math.min(remaining, capLeft, skuRoom);
+      perDay[i][day] = allocatedToday + alloc;
+      remaining -= alloc; capLeft -= alloc;
+    }
+  }
+  return finalize(ordered, perDay, cfg);
+}
+
+function scheduleUniform(ordered, cfg){
+  const { dailyLineCapacity, horizonDays } = cfg;
+  const perDay = ordered.map(()=> new Array(horizonDays).fill(0));
+  const skuMax = ordered.map(s=> s.maxPerSkuPerDay ?? cfg.maxPerSkuPerDay);
+  const desiredPerDay = ordered.map((s,i)=> Math.min(skuMax[i], Math.ceil(Math.max(0,s.target)/horizonDays)));
+  const remaining = ordered.map(s=> Math.max(0,s.target));
+
+  for(let day=0; day<horizonDays; day++){
+    let capLeft = dailyLineCapacity;
+    for(let i=0;i<ordered.length && capLeft>0;i++){
+      if(remaining[i]<=0) continue;
+      const want = Math.min(desiredPerDay[i], remaining[i], capLeft, skuMax[i]);
+      if(want<=0) continue;
+      perDay[i][day] = want; remaining[i]-=want; capLeft-=want;
+    }
+  }
+  for(let day=0; day<horizonDays; day++){
+    let used=0; for(let i=0;i<ordered.length;i++) used+=perDay[i][day];
+    let capLeft = dailyLineCapacity - used;
+    for(let i=0;i<ordered.length && capLeft>0;i++){
+      if(remaining[i]<=0) continue;
+      const room = skuMax[i] - perDay[i][day];
+      const add = Math.min(remaining[i], capLeft, room);
+      if(add<=0) continue;
+      perDay[i][day]+=add; remaining[i]-=add; capLeft-=add;
+    }
+  }
+  return finalize(ordered, perDay, cfg);
+}
+
+function finalize(ordered, perDay, cfg){
+  return ordered.map((s,i)=>{
+    const dayArr = perDay[i];
+    const scheduled = dayArr.reduce((a,b)=>a+b,0);
+    const target = Math.max(0,s.target);
+    return { code:s.code, name:s.name, priority:s.priority, target,
+      perDay:dayArr, perWeek:rollUpToWeeks(dayArr,cfg), scheduled,
+      shortfall:Math.max(0, target-scheduled) };
+  });
+}
+
+function schedule(skus, cfg){
+  const warnings=[];
+  const active=[], inactive=[];
+  for(const s of skus){
+    if(Math.max(0,s.target)<=0){
+      const perDay=new Array(cfg.horizonDays).fill(0);
+      inactive.push({code:s.code,name:s.name,priority:s.priority,target:0,perDay,
+        perWeek:rollUpToWeeks(perDay,cfg),scheduled:0,shortfall:0});
+      warnings.push({code:'zero_target',skuCode:s.code,
+        message:`SKU ${s.code} has a non-positive target and is excluded from the schedule.`});
+    } else active.push(s);
+  }
+  const ecfg = { ...cfg, dailyLineCapacity: sharedLineCapacity(active, cfg) };
+  const totalDemand = active.reduce((a,s)=>a+Math.max(0,s.target),0);
+  const totalCapacity = ecfg.dailyLineCapacity*ecfg.horizonDays;
+  if(totalDemand>totalCapacity){
+    warnings.push({code:'capacity_exceeded',
+      message:`Total demand (${fmt(totalDemand)}) exceeds horizon capacity (${fmt(totalCapacity)}). Lower-priority SKUs will carry shortfall.`});
+  }
+  const ordered = orderSkus(active);
+  const scheduled = ecfg.mode==='uniform' ? scheduleUniform(ordered,ecfg) : scheduleMaxFill(ordered,ecfg);
+  for(const r of scheduled){
+    if(r.shortfall>0) warnings.push({code:'shortfall',skuCode:r.code,
+      message:`SKU ${r.code} has a shortfall of ${fmt(r.shortfall)} units that could not be scheduled within ${ecfg.horizonDays} days.`});
+  }
+  const allRows=[...scheduled,...inactive];
+  allRows.sort((a,b)=>{
+    const pa=PRIORITY_RANK[a.priority]??9, pb=PRIORITY_RANK[b.priority]??9;
+    if(pa!==pb) return pa-pb;
+    if(b.target!==a.target) return b.target-a.target;
+    return a.code<b.code?-1:a.code>b.code?1:0;
+  });
+  const dayCapacityUsed=new Array(ecfg.horizonDays).fill(0);
+  for(const r of allRows) for(let d=0;d<ecfg.horizonDays;d++) dayCapacityUsed[d]+=r.perDay[d]||0;
+  return { skus:allRows, dayCapacityUsed, weeks:weekCount(ecfg), config:ecfg, warnings };
+}
+
+/* ============================================================================
+   DERIVATIONS
+   ============================================================================ */
+function computePriority(doi){
+  const d = +doi || 0;
+  if(d < 15) return 'P0';
+  if(d < 21) return 'P1';
+  if(d <= 30) return 'P2';
+  return 'P3';
+}
+const TARGET_MULT = { P0:10, P1:15, P2:15, P3:10 };
+function computeTarget(r){
+  const mult = TARGET_MULT[r.priority] ?? 10;
+  return Math.max(0, Math.round((r.drr||0) * mult));
+}
+function tonnage(packSize, units){
+  return Math.round((((+packSize||0) * (+units||0)) / 1e6) * 1000) / 1000;
+}
+function recompute(r){
+  r.priority   = computePriority(r.doi);
+  r.target     = computeTarget(r);
+  r.tonM1      = tonnage(r.packSize, r.prodM1);
+  r.tonM2      = tonnage(r.packSize, r.prodM2);
+  r.supplyPlan = +r.prodM1 || 0;
+  r.balance    = r.supplyPlan - r.target;
+}
+
+/* ============================================================================
+   UI
+   ============================================================================ */
+const $ = sel => document.querySelector(sel);
+const fmt = n => (n||0).toLocaleString('en-US');
+
+let state = new Map();
+let currentCm = DEFAULT_CM;
+const cmName = () => MANUFACTURERS[currentCm]?.name || currentCm;
+
+function showTab(id){
+  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('active', p.id===id));
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+}
+document.querySelectorAll('.tabs button').forEach(b=> b.addEventListener('click', ()=> showTab(b.dataset.tab)));
+$('#goTab2Btn').addEventListener('click', ()=> showTab('tab2'));
+
+function readConfig(){
+  return {
+    dailyLineCapacity:+$('#cfgCap').value||0,
+    maxPerSkuPerDay:+$('#cfgMax').value||0,
+    minRun:+$('#cfgMin').value||0,
+    horizonDays:Math.max(1,+$('#cfgHorizon').value||1),
+    daysPerWeek:Math.max(1,+$('#cfgWeek').value||1),
+    mode:$('#cfgMode').value,
+  };
+}
+function capDefaults(){
+  return { lineCap:+$('#cfgCap').value||0, maxCap:+$('#cfgMax').value||0, minCap:+$('#cfgMin').value||0 };
+}
+
+/* ---- rendering ---- */
+function renderTab1(){
+  const filter = $('#t1Filter').value.trim().toLowerCase();
+  const body = $('#t1Body'); body.innerHTML='';
+  let shown=0;
+  let sumProdM1=0, sumTonM1=0, sumProdM2=0, sumTonM2=0;
+  for(const [code,row] of state){
+    if(filter && !code.toLowerCase().includes(filter) && !row.name.toLowerCase().includes(filter)) continue;
+    shown++;
+    sumProdM1 += +row.prodM1||0;
+    sumTonM1  += +row.tonM1||0;
+    sumProdM2 += +row.prodM2||0;
+    sumTonM2  += +row.tonM2||0;
+    const tr=document.createElement('tr');
+    tr.innerHTML =
+      `<td class="l code">${esc(code)}</td>`+
+      `<td class="l">${esc(row.name)}</td>`+
+      `<td><input data-k="packSize" data-c="${esc(code)}" type="number" value="${row.packSize}" min="0" step="10"></td>`+
+      `<td><input data-k="prodM1" data-c="${esc(code)}" type="number" value="${row.prodM1}" min="0" step="100"></td>`+
+      `<td><input data-calc="tonM1" data-c="${esc(code)}" type="number" value="${row.tonM1}" readonly tabindex="-1" class="calc" title="(pack size × M1) ÷ 10⁶"></td>`+
+      `<td><input data-k="prodM2" data-c="${esc(code)}" type="number" value="${row.prodM2}" min="0" step="100"></td>`+
+      `<td><input data-calc="tonM2" data-c="${esc(code)}" type="number" value="${row.tonM2}" readonly tabindex="-1" class="calc" title="(pack size × M2) ÷ 10⁶"></td>`;
+    body.appendChild(tr);
+  }
+  $('#t1Count').textContent = `${shown} / ${state.size} shown`;
+  const fmtTon = v => (Math.round(v*1000)/1000).toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3});
+  $('#t1Foot').innerHTML = `<tr class="tot-row">
+    <td class="l tot-lbl" colspan="3">Total · ${shown} SKU${shown===1?'':'s'}</td>
+    <td class="tot-val">${fmt(sumProdM1)}</td>
+    <td class="tot-val">${fmtTon(sumTonM1)}</td>
+    <td class="tot-val">${fmt(sumProdM2)}</td>
+    <td class="tot-val">${fmtTon(sumTonM2)}</td>
+  </tr>`;
+}
+
+function renderTab2(){
+  const filter = $('#t2Filter').value.trim().toLowerCase();
+  const body = $('#t2Body'); body.innerHTML='';
+  let shown=0;
+  for(const [code,row] of state){
+    if(filter && !code.toLowerCase().includes(filter) && !row.name.toLowerCase().includes(filter)) continue;
+    shown++;
+    const cls=c=>`<option value="${c}"${row.skuClass===c?' selected':''}>${c}</option>`;
+    const tr=document.createElement('tr');
+    tr.innerHTML =
+      `<td class="l code">${esc(code)}</td>`+
+      `<td class="l">${esc(row.name)}</td>`+
+      `<td class="l"><select data-k="skuClass" data-c="${esc(code)}">${cls('A')}${cls('B')}${cls('C')}</select></td>`+
+      `<td><input data-k="currentStock" data-c="${esc(code)}" type="number" value="${row.currentStock}" min="0" step="100"></td>`+
+      `<td><input data-k="drr" data-c="${esc(code)}" type="number" value="${row.drr}"></td>`+
+      `<td><input data-k="doi" data-c="${esc(code)}" type="number" value="${row.doi}"></td>`+
+      `<td class="l"><span class="pill ${row.priority}" data-calc="priority" data-c="${esc(code)}" title="Computed from DOI band">${row.priority}</span></td>`+
+      `<td><input data-k="lineCap" data-c="${esc(code)}" type="number" value="${row.lineCap}" min="0" step="500"></td>`+
+      `<td><input data-k="minCap" data-c="${esc(code)}" type="number" value="${row.minCap}" min="0" step="100"></td>`+
+      `<td><input data-k="maxCap" data-c="${esc(code)}" type="number" value="${row.maxCap}" min="0" step="500"></td>`+
+      `<td><input data-calc="target" data-c="${esc(code)}" type="number" value="${row.target}" readonly tabindex="-1" class="calc" title="Y = priority × DRR"></td>`+
+      `<td><input data-calc="supplyPlan" data-c="${esc(code)}" type="number" value="${row.supplyPlan}" readonly tabindex="-1" class="calc" title="X = Production Plan M1 (TAB-1)"></td>`+
+      `<td><input data-calc="balance" data-c="${esc(code)}" type="number" value="${row.balance}" readonly tabindex="-1" class="calc" title="X − Y"></td>`;
+    body.appendChild(tr);
+  }
+  $('#t2Count').textContent = `${shown} / ${state.size} shown`;
+  $('#cmTag').textContent = `${cmName()} · ${state.size} SKUs`;
+  for(const [code] of state) paintBalance(code);
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function renderInputs(){ renderTab1(); renderTab2(); }
+
+function updateCalc(code){
+  const row=state.get(code); if(!row) return;
+  document.querySelectorAll(`[data-calc][data-c="${cssAttr(code)}"]`).forEach(el=>{
+    const f=el.dataset.calc;
+    if(f==='priority'){ el.textContent=row.priority; el.className='pill '+row.priority; el.dataset.calc='priority'; el.dataset.c=code; }
+    else if(el.tagName==='INPUT'){ el.value=row[f]; }
+    else el.textContent=row[f];
+  });
+  paintBalance(code);
+}
+function paintBalance(code){
+  const row=state.get(code); if(!row) return;
+  document.querySelectorAll(`[data-calc="balance"][data-c="${cssAttr(code)}"]`).forEach(el=>{
+    el.style.color = row.balance<0 ? 'var(--bad)' : 'var(--good)';
+  });
+}
+function cssAttr(s){ return String(s).replace(/(["\\])/g,'\\$1'); }
+
+function onEdit(el){
+  const c=el.dataset?.c, k=el.dataset?.k;
+  if(!c||!k) return;
+  const row=state.get(c); if(!row) return;
+  row[k] = (k==='skuClass') ? el.value : (+el.value||0);
+  recompute(row);
+  updateCalc(c);
+}
+document.addEventListener('input', e=> onEdit(e.target));
+document.addEventListener('change', e=> { if(e.target.tagName==='SELECT') onEdit(e.target); });
+
+$('#t1Filter').addEventListener('input', renderTab1);
+$('#t2Filter').addEventListener('input', renderTab2);
+$('#zeroBtn').addEventListener('click', ()=>{ for(const r of state.values()){ r.drr=0; recompute(r); } renderTab2(); });
+
+/* ============================================================================
+   IMPORT — unchanged from original
+   ============================================================================ */
+const COLSPEC = {
+  packSize:     {names:['Pack Size','Packsize','Pack Size (g)','Pack Size Grams'], num:true},
+  prodM1:       {names:['Production Plan M1','Prod Plan M1','Production Plan  M1','Prod Plan M1 Units'], num:true},
+  prodM2:       {names:['Production Plan M2','Prod Plan M2'], num:true},
+  skuClass:     {names:['SKU Class','Class','Assign A/B/C'], num:false},
+  currentStock: {names:['Current Stock','Stock','Opening Stock','Supply','Supply Units'], num:true},
+  drr:          {names:['DRR'], num:true},
+  doi:          {names:['DOI'], num:true},
+  lineCap:      {names:['Line Cap','Line Capacity','Daily Line Capacity'], num:true},
+  minCap:       {names:['Min Cap','Min Run','Minimum Run'], num:true},
+  maxCap:       {names:['Max Cap','Max Per SKU/Day','Max Per SKU Per Day','Max Per Day'], num:true},
+};
+const norm = s => String(s).toLowerCase().replace(/[\s_]+/g,' ').trim();
+
+function applyImport(header, rows){
+  const findIdx=names=>{ const t=names.map(norm); return header.findIndex(h=>t.includes(norm(h))); };
+  const ci=findIdx(['SKU Code','SKU_Code','Code','Sku Code']);
+  if(ci<0) return {matched:0, unknown:[]};
+  const idxMap={}; for(const k in COLSPEC) idxMap[k]=findIdx(COLSPEC[k].names);
+  let matched=0; const unknown=[];
+  const num=v=>{ const n=+String(v??'').replace(/,/g,'').trim(); return Number.isFinite(n)?n:0; };
+  for(const r of rows){
+    const code=String(r[ci]??'').trim(); if(!code) continue;
+    const row=state.get(code); if(!row){ unknown.push(code); continue; }
+    matched++;
+    for(const k in COLSPEC){
+      const i=idxMap[k]; if(i<0) continue;
+      const raw=r[i]; if(raw===undefined) continue;
+      const s=String(raw).trim(); if(s==='') continue;
+      row[k] = COLSPEC[k].num ? num(raw) : s.toUpperCase();
+    }
+    recompute(row);
+  }
+  return {matched, unknown};
+}
+
+function csvCell(v){ const s=String(v??''); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
+function downloadCSV(filename, rows){
+  const csv=rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(cur); cur=''; }
+    else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; }
+    else if(c==='\r'){ /* skip */ }
+    else cur+=c;
+  }
+  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
+  const nonEmpty=rows.filter(r=>r.some(c=>c.trim()!==''));
+  const header=nonEmpty.shift()||[];
+  return {header, rows:nonEmpty};
+}
+
+async function readXlsx(arrayBuffer){
+  const dv = new DataView(arrayBuffer);
+  const bytes = new Uint8Array(arrayBuffer);
+  let eocd=-1;
+  for(let i=bytes.length-22;i>=0;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error('Not a valid .xlsx file (no end-of-central-directory record).');
+  const cdCount=dv.getUint16(eocd+10,true);
+  const cdOffset=dv.getUint32(eocd+16,true);
+  const entries={};
+  let p=cdOffset;
+  const td=new TextDecoder();
+  for(let n=0;n<cdCount;n++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const method=dv.getUint16(p+10,true);
+    const compSize=dv.getUint32(p+20,true);
+    const nameLen=dv.getUint16(p+28,true);
+    const extraLen=dv.getUint16(p+30,true);
+    const commentLen=dv.getUint16(p+32,true);
+    const localOffset=dv.getUint32(p+42,true);
+    const name=td.decode(bytes.subarray(p+46,p+46+nameLen));
+    entries[name]={method,compSize,localOffset};
+    p+=46+nameLen+extraLen+commentLen;
+  }
+  async function extract(name){
+    const e=entries[name]; if(!e) return null;
+    const lp=e.localOffset;
+    if(dv.getUint32(lp,true)!==0x04034b50) throw new Error('Corrupt .xlsx (bad local header).');
+    const lNameLen=dv.getUint16(lp+26,true);
+    const lExtraLen=dv.getUint16(lp+28,true);
+    const start=lp+30+lNameLen+lExtraLen;
+    const comp=bytes.subarray(start, start+e.compSize);
+    if(e.method===0) return comp;
+    if(typeof DecompressionStream==='undefined') throw new Error('This browser cannot decompress .xlsx. Use CSV import instead.');
+    const ds=new DecompressionStream('deflate-raw');
+    const stream=new Response(comp).body.pipeThrough(ds);
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  return {entries, extract};
+}
+function colIdx(ref){ const m=/^([A-Z]+)/.exec(ref)[1]; let n=0; for(const ch of m) n=n*26+(ch.charCodeAt(0)-64); return n-1; }
+function parseSharedStrings(xml){
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  const out=[];
+  for(const si of doc.getElementsByTagName('si')){
+    let s=''; for(const t of si.getElementsByTagName('t')) s+=t.textContent;
+    out.push(s);
+  }
+  return out;
+}
+function parseWorksheet(xml, strings){
+  const doc=new DOMParser().parseFromString(xml,'application/xml');
+  const rows=[];
+  for(const rowEl of doc.getElementsByTagName('row')){
+    const arr=[];
+    for(const c of rowEl.getElementsByTagName('c')){
+      const ref=c.getAttribute('r'); if(!ref) continue;
+      const ci=colIdx(ref);
+      const t=c.getAttribute('t');
+      const vEl=c.getElementsByTagName('v')[0];
+      const isEl=c.getElementsByTagName('is')[0];
+      let v='';
+      if(t==='s' && vEl) v=strings[+vEl.textContent]||'';
+      else if(t==='inlineStr' && isEl) v=isEl.textContent;
+      else if(vEl) v=vEl.textContent;
+      arr[ci]=v;
+    }
+    rows.push(arr);
+  }
+  return rows;
+}
+function findHeaderRow(rows){
+  const want=norm('SKU Code');
+  for(let i=0;i<rows.length;i++){
+    if(rows[i].some(c=>norm(c)===want || norm(c)==='code')) return i;
+  }
+  return -1;
+}
+async function importXlsxFile(file){
+  const zip=await readXlsx(await file.arrayBuffer());
+  const ssBytes=await zip.extract('xl/sharedStrings.xml');
+  const strings=ssBytes?parseSharedStrings(new TextDecoder().decode(ssBytes)):[];
+  const sheetNames=Object.keys(zip.entries).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort();
+  let matched=0; const unknown=[]; let sheetsUsed=0;
+  for(const sn of sheetNames){
+    const rows=parseWorksheet(new TextDecoder().decode(await zip.extract(sn)), strings);
+    const hdr=findHeaderRow(rows);
+    if(hdr<0) continue;
+    sheetsUsed++;
+    const res=applyImport(rows[hdr], rows.slice(hdr+1));
+    matched+=res.matched; unknown.push(...res.unknown);
+  }
+  return {matched, unknown, sheetsUsed};
+}
+
+$('#importXlsxBtn').addEventListener('click', ()=> $('#xlsxFile').click());
+$('#xlsxFile').addEventListener('change', async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  try{
+    const {matched,unknown,sheetsUsed}=await importXlsxFile(file);
+    renderInputs();
+    if(sheetsUsed===0) alert('No sheet with a "SKU Code" header was found in that workbook.');
+    else alert(`Imported ${matched} matching SKU(s) from ${sheetsUsed} sheet(s).`+(unknown.length?`\n${unknown.length} unknown code(s) ignored:\n`+unknown.slice(0,10).join('\n'):''));
+  }catch(err){ alert('Could not read .xlsx: '+err.message); }
+  e.target.value='';
+});
+
+function wireCsvImport(btnSel, fileSel, after){
+  $(btnSel).addEventListener('click', ()=> $(fileSel).click());
+  $(fileSel).addEventListener('change', async e=>{
+    const file=e.target.files[0]; if(!file) return;
+    const {header,rows}=parseCSV(await file.text());
+    const {matched,unknown}=applyImport(header, rows);
+    renderInputs();
+    alert(`Imported ${matched} matching SKU(s).`+(unknown.length?`\n${unknown.length} unknown code(s) ignored:\n`+unknown.slice(0,10).join('\n'):''));
+    e.target.value='';
+  });
+}
+wireCsvImport('#importCsv1Btn','#csv1File');
+wireCsvImport('#importCsv2Btn','#csv2File');
+
+$('#template1Btn').addEventListener('click', ()=>{
+  const header=['SKU Code','SKU Name','Pack Size','Production Plan M1','Production Plan M2'];
+  const rows=[...state.values()].map(r=>[r.code,r.name,r.packSize,r.prodM1,r.prodM2]);
+  downloadCSV(`${currentCm}_tab1_supply_planner.csv`,[header,...rows]);
+});
+$('#template2Btn').addEventListener('click', ()=>{
+  const header=['SKU Code','SKU Name','SKU Class','Current Stock','DRR','DOI','Prod Priority','Line Cap','Min Cap','Max Cap','Target Run QTY','Monthly supply plan','Balance to Go'];
+  const rows=[...state.values()].map(r=>[r.code,r.name,r.skuClass,r.currentStock,r.drr,r.doi,r.priority,r.lineCap,r.minCap,r.maxCap,r.target,r.supplyPlan,r.balance]);
+  downloadCSV(`${currentCm}_tab2_scheduler.csv`,[header,...rows]);
+});
+
+/* ============================================================================
+   RUN + RESULTS — unchanged from original
+   ============================================================================ */
+$('#runBtn').addEventListener('click', run);
+function run(){
+  const cfg=readConfig();
+  const skus=[...state.values()].map(r=>({
+    code:r.code, name:r.name, priority:r.priority, target:r.target,
+    dailyLineCapacity:r.lineCap, maxPerSkuPerDay:r.maxCap, minRun:r.minCap,
+  }));
+  const res=schedule(skus,cfg);
+  window.__lastResult=res;
+  renderSummary(res); renderWarnings(res); renderWeekly(res); renderDay(res); renderShortfalls(res);
+  requestAnimationFrame(()=> $('#weeklySec').scrollIntoView({behavior:'smooth', block:'start'}));
+}
+
+function renderSummary(res){
+  const sched=res.skus.reduce((a,r)=>a+r.scheduled,0);
+  const short=res.skus.reduce((a,r)=>a+r.shortfall,0);
+  const cap=res.config.dailyLineCapacity*res.config.horizonDays;
+  const active=res.skus.filter(r=>r.target>0).length;
+  $('#kpis').innerHTML=
+    kpi(active,'SKUs scheduled')+kpi(fmt(sched),'Units scheduled')+
+    kpi(fmt(short),'Units shortfall')+kpi(cap?Math.round(sched/cap*100)+'%':'–','Horizon utilisation')+
+    kpi(res.weeks,'Weeks')+kpi(res.config.mode,'Mode');
+  $('#summarySec').style.display='';
+}
+const kpi=(v,l)=>`<div class="kpi"><b class="num">${v}</b><span>${l}</span></div>`;
+
+function renderWarnings(res){
+  const sec=$('#warnSec');
+  if(!res.warnings.length){ sec.style.display='none'; return; }
+  sec.style.display='';
+  $('#warns').innerHTML=res.warnings.map(w=>
+    `<div class="warn-item"><span class="tag ${w.code}">${w.code.replace('_',' ')}</span><span>${esc(w.message)}</span></div>`).join('');
+}
+
+function priPill(p){ return `<span class="pill ${p}">${p}</span>`; }
+
+function renderWeekly(res){
+  const W=res.weeks;
+  let h='<thead><tr><th class="l">SKU Code</th><th class="l">SKU Name</th><th class="l">Pri</th>';
+  for(let w=0;w<W;w++) h+=`<th>W${w+1}</th>`;
+  h+='<th class="totcol">Total</th></tr></thead><tbody>';
+  for(const r of res.skus){
+    const tot=r.perWeek.reduce((a,b)=>a+b,0);
+    h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${esc(r.name)}</td><td class="l">${priPill(r.priority)}</td>`;
+    for(let w=0;w<W;w++) h+=`<td class="num">${r.perWeek[w]?fmt(r.perWeek[w]):'<span class=muted>–</span>'}</td>`;
+    h+=`<td class="num totcol">${fmt(tot)}</td></tr>`;
+  }
+  h+='</tbody>';
+  $('#weeklyTbl').innerHTML=h; $('#weeklySec').style.display='';
+}
+
+function renderDay(res){
+  const D=res.config.horizonDays, cap=res.config.dailyLineCapacity;
+  let h='<thead><tr><th class="l">SKU Code</th><th class="l">Pri</th>';
+  for(let d=0;d<D;d++) h+=`<th>D${d+1}</th>`;
+  h+='</tr></thead><tbody>';
+  for(const r of res.skus){
+    if(r.scheduled===0) continue;
+    h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${priPill(r.priority)}</td>`;
+    for(let d=0;d<D;d++){ const v=r.perDay[d]; h+=`<td class="day${v?'':' z'}">${v?fmt(v):'·'}</td>`; }
+    h+='</tr>';
+  }
+  h+=`<tr><td class="l muted">Line used</td><td></td>`;
+  for(let d=0;d<D;d++){
+    const u=res.dayCapacityUsed[d], pct=cap?Math.round(u/cap*100):0;
+    h+=`<td><div class="bar ${u>cap?'over':''}" title="${fmt(u)} / ${fmt(cap)} (${pct}%)"><i style="width:${Math.min(100,pct)}%"></i></div></td>`;
+  }
+  h+='</tr><tr><td class="l muted">Util %</td><td></td>';
+  for(let d=0;d<D;d++){ const pct=cap?Math.round(res.dayCapacityUsed[d]/cap*100):0; h+=`<td class="num muted">${pct}%</td>`; }
+  h+='</tr></tbody>';
+  $('#dayTbl').innerHTML=h; $('#daySec').style.display='';
+}
+
+function renderShortfalls(res){
+  const rows=res.skus.filter(r=>r.shortfall>0);
+  const sec=$('#shortSec');
+  let h='<thead><tr><th class="l">SKU Code</th><th class="l">SKU Name</th><th class="l">Pri</th><th>Target</th><th>Scheduled</th><th>Shortfall</th></tr></thead><tbody>';
+  if(!rows.length){ h+=`<tr><td class="l muted" colspan="6">No shortfalls — every target fit within the horizon.</td></tr>`; }
+  for(const r of rows) h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${esc(r.name)}</td><td class="l">${priPill(r.priority)}</td><td class="num">${fmt(r.target)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num" style="color:var(--bad)">${fmt(r.shortfall)}</td></tr>`;
+  h+='</tbody>';
+  $('#shortTbl').innerHTML=h; sec.style.display='';
+}
+
+$('#dlWeekly').addEventListener('click', ()=>{
+  const res=window.__lastResult; if(!res) return;
+  const header=['SKU Code','SKU Name','Priority',...Array.from({length:res.weeks},(_,i)=>'W'+(i+1)),'Total'];
+  const rows=res.skus.map(r=>[r.code,r.name,r.priority,...r.perWeek,r.perWeek.reduce((a,b)=>a+b,0)]);
+  downloadCSV(`${currentCm}_weekly_schedule.csv`,[header,...rows]);
+});
+$('#dlDay').addEventListener('click', ()=>{
+  const res=window.__lastResult; if(!res) return;
+  const D=res.config.horizonDays;
+  const header=['SKU Code','SKU Name','Priority',...Array.from({length:D},(_,i)=>'D'+(i+1))];
+  const rows=res.skus.map(r=>[r.code,r.name,r.priority,...r.perDay]);
+  rows.push([]); rows.push(['LINE USED','','',...res.dayCapacityUsed]);
+  downloadCSV(`${currentCm}_daywise_schedule.csv`,[header,...rows]);
+});
+
+/* ============================================================================
+   INIT
+   ============================================================================ */
+function clearResults(){
+  for(const id of ['summarySec','warnSec','weeklySec','daySec','shortSec']) $('#'+id).style.display='none';
+  window.__lastResult=null;
+}
+
+/**
+ * Load manufacturer. Uses live sheet data if available; otherwise shows blank rows
+ * with just the SKU code and name (no dummy values).
+ */
+function loadManufacturer(id){
+  currentCm = MANUFACTURERS[id] ? id : DEFAULT_CM;
+  const cm  = MANUFACTURERS[currentCm];
+  const d   = capDefaults();
+
+  if(cm.sheetData && cm.sheetData.length > 0){
+    // Populate state from Google Sheets data
+    state = new Map();
+    for(const sku of cm.sheetData){
+      const row = {
+        code: sku.code, name: sku.name,
+        packSize: sku.packSize || 0,
+        prodM1: sku.prodM1 || 0, prodM2: sku.prodM2 || 0,
+        tonM1: 0, tonM2: 0,
+        skuClass: sku.skuClass || 'A',
+        currentStock: sku.currentStock || 0,
+        drr: sku.drr || 0, doi: sku.doi || 0,
+        priority: 'P3',
+        lineCap: sku.lineCap || d.lineCap,
+        minCap:  sku.minCap  || d.minCap,
+        maxCap:  sku.maxCap  || d.maxCap,
+        target: 0, supplyPlan: 0, balance: 0,
+      };
+      recompute(row);
+      state.set(sku.code, row);
+    }
+  } else {
+    // Fallback: show SKU list with all values at zero (no dummy data)
+    state = new Map(cm.skus.map(([code,name])=>{
+      const row = {
+        code, name,
+        packSize:0, prodM1:0, prodM2:0, tonM1:0, tonM2:0,
+        skuClass:'A', currentStock:0, drr:0, doi:0, priority:'P3',
+        lineCap: d.lineCap||10000, minCap: d.minCap||1000, maxCap: d.maxCap||10000,
+        target:0, supplyPlan:0, balance:0,
+      };
+      recompute(row);
+      return [code, row];
+    }));
+  }
+
+  $('#t1Filter').value=''; $('#t2Filter').value='';
+  renderInputs();
+  clearResults();
+}
+
+function initManufacturers(){
+  const sel=$('#cmSelect');
+  sel.innerHTML=Object.entries(MANUFACTURERS).map(([id,cm])=>`<option value="${id}">${esc(cm.name)}</option>`).join('');
+  sel.value = MANUFACTURERS[currentCm] ? currentCm : DEFAULT_CM;
+  sel.addEventListener('change', e=> loadManufacturer(e.target.value));
+}
+
+// Bootstrap: init UI with fallback data, then fetch from the sheet
+initManufacturers();
+loadManufacturer(DEFAULT_CM);
+loadFromSheet(); // async — updates UI when complete
+</script>
+</body>
+</html>
