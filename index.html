@@ -94,13 +94,13 @@
 <!-- Loading overlay shown while fetching from Google Sheets -->
 <div id="loadOverlay">
   <div class="spinner"></div>
-  <span id="loadMsg">Loading data from Google Sheets…</span>
+  <span id="loadMsg">Loading data from Google Sheetsâ¦</span>
 </div>
 
 <header>
   <div>
     <h1>Production Scheduler</h1>
-    <span class="sub">TAB-1 Supply Planner inputs · TAB-2 capacitated scheduler · Target = priority × DRR · shared daily line · Google Sheets backend</span>
+    <span class="sub">TAB-1 Supply Planner inputs Â· TAB-2 capacitated scheduler Â· Target = priority Ã DRR Â· shared daily line Â· Google Sheets backend</span>
   </div>
   <div class="cm-pick">
     <label for="cmSelect">Contract manufacturer</label>
@@ -110,30 +110,30 @@
 
 <!-- Google Sheets sync bar -->
 <div class="sync-bar">
-  <button id="loadSheetBtn" class="ghost">↻ Reload from Sheet</button>
-  <button id="saveSheetBtn" class="save-btn">💾 Save to Sheet</button>
+  <button id="loadSheetBtn" class="ghost">â» Reload from Sheet</button>
+  <button id="saveSheetBtn" class="save-btn">ð¾ Save to Sheet</button>
   <span class="sync-status" id="syncStatus">Not synced yet</span>
 </div>
 
 <nav class="tabs">
-  <button data-tab="tab1" class="active">Production Planner<span class="t-sub">Inputs · supply plan M1 / M2</span></button>
+  <button data-tab="tab1" class="active">Production Planner<span class="t-sub">Inputs Â· supply plan M1 / M2</span></button>
   <button data-tab="tab2">Scheduler<span class="t-sub">Run &amp; schedule</span></button>
 </nav>
 
 <main>
-  <!-- ============================ TAB 1 — SUPPLY PLANNER ============================ -->
+  <!-- ============================ TAB 1 â SUPPLY PLANNER ============================ -->
   <div id="tab1" class="tabpanel active">
     <section>
-      <h2>Inputs Tab — Supply Planner <span class="hint">enter the production plan for M1 &amp; M2 · Tonnage = (pack size g × plan units) ÷ 10⁶</span></h2>
+      <h2>Inputs Tab â Supply Planner <span class="hint">enter the production plan for M1 &amp; M2 Â· Tonnage = (pack size g Ã plan units) Ã· 10â¶</span></h2>
       <div class="filter-in">
-        <input id="t1Filter" type="text" placeholder="Filter SKUs by code or name…">
+        <input id="t1Filter" type="text" placeholder="Filter SKUs by code or nameâ¦">
         <button class="ghost" id="importXlsxBtn">Import Excel (.xlsx)</button>
         <button class="ghost" id="importCsv1Btn">Import CSV</button>
         <button class="ghost" id="template1Btn">Download template (CSV)</button>
         <input id="xlsxFile" type="file" accept=".xlsx" style="display:none">
         <input id="csv1File" type="file" accept=".csv" style="display:none">
         <span class="muted" id="t1Count"></span>
-        <button id="goTab2Btn" style="margin-left:auto">Open scheduler (TAB-2) ▶</button>
+        <button id="goTab2Btn" style="margin-left:auto">Open scheduler (TAB-2) â¶</button>
       </div>
       <div class="scroll" style="max-height:460px">
         <table class="inp-table">
@@ -141,23 +141,23 @@
             <th class="l">SKU Code</th><th class="l">SKU Name</th>
             <th title="Pack size in grams">Pack Size (g)</th>
             <th>Production Plan M1</th>
-            <th title="(Pack size g × plan units) ÷ 10⁶">Tonnage Plan M1</th>
+            <th title="(Pack size g Ã plan units) Ã· 10â¶">Tonnage Plan M1</th>
             <th>Production Plan M2</th>
-            <th title="(Pack size g × plan units) ÷ 10⁶">Tonnage Plan M2</th>
+            <th title="(Pack size g Ã plan units) Ã· 10â¶">Tonnage Plan M2</th>
           </tr></thead>
           <tbody id="t1Body"></tbody>
           <tfoot id="t1Foot"></tfoot>
         </table>
       </div>
       <div class="footnote">
-        <b>Import Excel (.xlsx)</b> reads the workbook in-browser and matches rows by exact <b>SKU Code</b> — it fills any recognised columns it finds across all sheets
-        (Pack Size, Production Plan M1/M2, plus the scheduler columns on TAB-2). <b>Tonnage = (pack size grams × production plan units) ÷ 10⁶</b> (tonnes), computed live.
-        <b>Production Plan M1</b> flows through to TAB-2 as the <b>Monthly supply plan (X)</b>, which drives the <b>Balance to Go (X − Target)</b> column.
+        <b>Import Excel (.xlsx)</b> reads the workbook in-browser and matches rows by exact <b>SKU Code</b> â it fills any recognised columns it finds across all sheets
+        (Pack Size, Production Plan M1/M2, plus the scheduler columns on TAB-2). <b>Tonnage = (pack size grams Ã production plan units) Ã· 10â¶</b> (tonnes), computed live.
+        <b>Production Plan M1</b> flows through to TAB-2 as the <b>Monthly supply plan (X)</b>, which drives the <b>Balance to Go (X â Target)</b> column.
       </div>
     </section>
   </div>
 
-  <!-- ============================ TAB 2 — SCHEDULER ============================ -->
+  <!-- ============================ TAB 2 â SCHEDULER ============================ -->
   <div id="tab2" class="tabpanel">
     <section>
       <h2>Configuration</h2>
@@ -170,16 +170,16 @@
         <div class="ctl"><label>Mode</label>
           <select id="cfgMode"><option value="max_fill">max_fill</option><option value="uniform">uniform</option></select>
         </div>
-        <div class="ctl"><label>&nbsp;</label><button id="runBtn">Run scheduler ▶</button></div>
+        <div class="ctl"><label>&nbsp;</label><button id="runBtn">Run scheduler â¶</button></div>
       </div>
-      <div class="footnote"><b>Line Cap</b>, <b>Min Cap</b> and <b>Max Cap</b> are <b>per-SKU</b> (see the columns in the table below — edit a row to override). The line stays <b>one shared line</b>: the engine schedules against a single shared cap equal to the largest per-SKU Line Cap. <b>Min Cap</b> = min-run guard, <b>Max Cap</b> = max units of a SKU per day.</div>
+      <div class="footnote"><b>Line Cap</b>, <b>Min Cap</b> and <b>Max Cap</b> are <b>per-SKU</b> (see the columns in the table below â edit a row to override). The line stays <b>one shared line</b>: the engine schedules against a single shared cap equal to the largest per-SKU Line Cap. <b>Min Cap</b> = min-run guard, <b>Max Cap</b> = max units of a SKU per day.</div>
     </section>
 
     <section>
-      <h2>Scheduler inputs — <b id="cmTag"></b>
-        <span class="hint">edit DRR &amp; DOI · Priority from DOI (&lt;15→P0, 15–&lt;21→P1, 21–30→P2, &gt;30→P3) · Target Run QTY = P0/P3:10×DRR, P1/P2:15×DRR · Balance to Go = supply plan − target</span></h2>
+      <h2>Scheduler inputs â <b id="cmTag"></b>
+        <span class="hint">edit DRR &amp; DOI Â· Priority from DOI (&lt;15âP0, 15â&lt;21âP1, 21â30âP2, &gt;30âP3) Â· Target Run QTY = P0/P3:10ÃDRR, P1/P2:15ÃDRR Â· Balance to Go = supply plan â target</span></h2>
       <div class="filter-in">
-        <input id="t2Filter" type="text" placeholder="Filter SKUs by code or name…">
+        <input id="t2Filter" type="text" placeholder="Filter SKUs by code or nameâ¦">
         <button class="ghost" id="zeroBtn">Reset DRR to 0</button>
         <button class="ghost" id="importCsv2Btn">Import CSV</button>
         <button class="ghost" id="template2Btn">Download template (CSV)</button>
@@ -197,14 +197,14 @@
             <th title="Per-SKU view of the shared daily line">Line Cap</th>
             <th title="Min-run guard for this SKU">Min Cap</th>
             <th title="Max units of this SKU per day">Max Cap</th>
-            <th title="Y = P0/P3:10×DRR, P1/P2:15×DRR">Target Run QTY</th>
+            <th title="Y = P0/P3:10ÃDRR, P1/P2:15ÃDRR">Target Run QTY</th>
             <th title="X = Production Plan M1 (from TAB-1)">Monthly supply plan</th>
-            <th title="X − Y">Balance to Go</th>
+            <th title="X â Y">Balance to Go</th>
           </tr></thead>
           <tbody id="t2Body"></tbody>
         </table>
       </div>
-      <div class="footnote">CSV import matches rows by exact <b>SKU Code</b>; recognised columns: SKU Class, Current Stock, DRR, DOI, Line Cap, Min Cap, Max Cap (blank cap cells keep the seeded default). <b>Priority</b> is from the DOI band and <b>Target Run QTY</b> from priority × DRR — both computed (any Target/Priority columns in an import are ignored). <b>Monthly supply plan (X)</b> mirrors Production Plan M1 from TAB-1. Codes are never auto-corrected (note <span class="code">.B0_N</span> vs <span class="code">.BO_N</span>).</div>
+      <div class="footnote">CSV import matches rows by exact <b>SKU Code</b>; recognised columns: SKU Class, Current Stock, DRR, DOI, Line Cap, Min Cap, Max Cap (blank cap cells keep the seeded default). <b>Priority</b> is from the DOI band and <b>Target Run QTY</b> from priority Ã DRR â both computed (any Target/Priority columns in an import are ignored). <b>Monthly supply plan (X)</b> mirrors Production Plan M1 from TAB-1. Codes are never auto-corrected (note <span class="code">.B0_N</span> vs <span class="code">.BO_N</span>).</div>
     </section>
 
     <section id="summarySec" style="display:none">
@@ -224,7 +224,7 @@
     </section>
 
     <section id="daySec" style="display:none">
-      <h2>Day-wise schedule <span class="hint">D1…Dn per SKU · line utilisation bar per day</span>
+      <h2>Day-wise schedule <span class="hint">D1â¦Dn per SKU Â· line utilisation bar per day</span>
         <button class="ghost" style="float:right;padding:5px 10px" id="dlDay">Export CSV</button></h2>
       <div class="scroll"><table id="dayTbl"></table></div>
     </section>
@@ -238,7 +238,7 @@
 
 <script>
 /* ============================================================================
-   CONTRACT MANUFACTURERS — base registry (names + fallback SKU list for Sapiens).
+   CONTRACT MANUFACTURERS â base registry (names + fallback SKU list for Sapiens).
    When Google Sheets data loads successfully, the .skus and .data fields are
    replaced with live sheet data. This lets the app still work if the sheet is
    temporarily unreachable.
@@ -305,7 +305,7 @@ function setSyncStatus(msg, cls=''){
  * On failure, keeps the hardcoded fallback and shows a warning.
  */
 async function loadFromSheet(){
-  setSyncStatus('Loading from sheet…');
+  setSyncStatus('Loading from sheetâ¦');
   document.getElementById('loadSheetBtn').disabled=true;
   document.getElementById('saveSheetBtn').disabled=true;
   try {
@@ -315,7 +315,7 @@ async function loadFromSheet(){
     const mfrs = data.manufacturers || {};
 
     if(Object.keys(mfrs).length === 0){
-      setSyncStatus('Sheet is empty — showing fallback data. Add rows and reload.','');
+      setSyncStatus('Sheet is empty â showing fallback data. Add rows and reload.','');
     } else {
       // Merge sheet data into MANUFACTURERS
       for(const [id, cm] of Object.entries(mfrs)){
@@ -324,11 +324,11 @@ async function loadFromSheet(){
         MANUFACTURERS[id].sheetData = cm.skus; // full row objects with all fields
       }
       const ts = new Date().toLocaleTimeString();
-      setSyncStatus(`Loaded ${Object.keys(mfrs).length} manufacturer(s) · ${ts}`, 'ok');
+      setSyncStatus(`Loaded ${Object.keys(mfrs).length} manufacturer(s) Â· ${ts}`, 'ok');
     }
   } catch(e){
     console.warn('Could not load from sheet:', e);
-    setSyncStatus('Could not reach sheet — using fallback data. Check env vars.', 'err');
+    setSyncStatus('Could not reach sheet â using fallback data. Check env vars.', 'err');
   }
 
   // Re-init dropdown + reload current manufacturer
@@ -342,8 +342,8 @@ async function loadFromSheet(){
 
 async function saveToSheet(){
   const btn=document.getElementById('saveSheetBtn');
-  btn.textContent='Saving…'; btn.disabled=true;
-  setSyncStatus('Saving to sheet…');
+  btn.textContent='Savingâ¦'; btn.disabled=true;
+  setSyncStatus('Saving to sheetâ¦');
   try {
     const skus=[...state.values()].map(r=>({
       code:r.code, name:r.name,
@@ -360,21 +360,21 @@ async function saveToSheet(){
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
     const ts=new Date().toLocaleTimeString();
-    setSyncStatus(`Saved ${data.updated||0} updated + ${data.added||0} new rows · ${ts}`, 'ok');
-    btn.textContent='✓ Saved';
+    setSyncStatus(`Saved ${data.updated||0} updated + ${data.added||0} new rows Â· ${ts}`, 'ok');
+    btn.textContent='â Saved';
   } catch(e){
     console.error('Save failed:', e);
     setSyncStatus('Save failed: '+e.message, 'err');
-    btn.textContent='✗ Error';
+    btn.textContent='â Error';
   }
-  setTimeout(()=>{ btn.textContent='💾 Save to Sheet'; btn.disabled=false; }, 2500);
+  setTimeout(()=>{ btn.textContent='ð¾ Save to Sheet'; btn.disabled=false; }, 2500);
 }
 
 document.getElementById('loadSheetBtn').addEventListener('click', loadFromSheet);
 document.getElementById('saveSheetBtn').addEventListener('click', saveToSheet);
 
 /* ============================================================================
-   ENGINE — identical to original
+   ENGINE â identical to original
    ============================================================================ */
 const PRIORITY_RANK = { P0:0, P1:1, P2:2, P3:3 };
 
@@ -525,6 +525,13 @@ function computeTarget(r){
 function tonnage(packSize, units){
   return Math.round((((+packSize||0) * (+units||0)) / 1e6) * 1000) / 1000;
 }
+function extractPackSize(name){
+  const m = (name||''). match(/(\d+(?:\.\d+)?)\s*(kgs?|gms?|g)\b/i);
+  if(!m) return 0;
+  const val = parseFloat(m[1]);
+  const unit = m[2].toLowerCase();
+  return (unit==='kg'||unit==='kgs') ? Math.round(val*1000) : val;
+}
 function recompute(r){
   r.priority   = computePriority(r.doi);
   r.target     = computeTarget(r);
@@ -584,15 +591,15 @@ function renderTab1(){
       `<td class="l">${esc(row.name)}</td>`+
       `<td><input data-k="packSize" data-c="${esc(code)}" type="number" value="${row.packSize}" min="0" step="10"></td>`+
       `<td><input data-k="prodM1" data-c="${esc(code)}" type="number" value="${row.prodM1}" min="0" step="100"></td>`+
-      `<td><input data-calc="tonM1" data-c="${esc(code)}" type="number" value="${row.tonM1}" readonly tabindex="-1" class="calc" title="(pack size × M1) ÷ 10⁶"></td>`+
+      `<td><input data-calc="tonM1" data-c="${esc(code)}" type="number" value="${row.tonM1}" readonly tabindex="-1" class="calc" title="(pack size Ã M1) Ã· 10â¶"></td>`+
       `<td><input data-k="prodM2" data-c="${esc(code)}" type="number" value="${row.prodM2}" min="0" step="100"></td>`+
-      `<td><input data-calc="tonM2" data-c="${esc(code)}" type="number" value="${row.tonM2}" readonly tabindex="-1" class="calc" title="(pack size × M2) ÷ 10⁶"></td>`;
+      `<td><input data-calc="tonM2" data-c="${esc(code)}" type="number" value="${row.tonM2}" readonly tabindex="-1" class="calc" title="(pack size Ã M2) Ã· 10â¶"></td>`;
     body.appendChild(tr);
   }
   $('#t1Count').textContent = `${shown} / ${state.size} shown`;
   const fmtTon = v => (Math.round(v*1000)/1000).toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3});
   $('#t1Foot').innerHTML = `<tr class="tot-row">
-    <td class="l tot-lbl" colspan="3">Total · ${shown} SKU${shown===1?'':'s'}</td>
+    <td class="l tot-lbl" colspan="3">Total Â· ${shown} SKU${shown===1?'':'s'}</td>
     <td class="tot-val">${fmt(sumProdM1)}</td>
     <td class="tot-val">${fmtTon(sumTonM1)}</td>
     <td class="tot-val">${fmt(sumProdM2)}</td>
@@ -620,13 +627,13 @@ function renderTab2(){
       `<td><input data-k="lineCap" data-c="${esc(code)}" type="number" value="${row.lineCap}" min="0" step="500"></td>`+
       `<td><input data-k="minCap" data-c="${esc(code)}" type="number" value="${row.minCap}" min="0" step="100"></td>`+
       `<td><input data-k="maxCap" data-c="${esc(code)}" type="number" value="${row.maxCap}" min="0" step="500"></td>`+
-      `<td><input data-calc="target" data-c="${esc(code)}" type="number" value="${row.target}" readonly tabindex="-1" class="calc" title="Y = priority × DRR"></td>`+
+      `<td><input data-calc="target" data-c="${esc(code)}" type="number" value="${row.target}" readonly tabindex="-1" class="calc" title="Y = priority Ã DRR"></td>`+
       `<td><input data-calc="supplyPlan" data-c="${esc(code)}" type="number" value="${row.supplyPlan}" readonly tabindex="-1" class="calc" title="X = Production Plan M1 (TAB-1)"></td>`+
-      `<td><input data-calc="balance" data-c="${esc(code)}" type="number" value="${row.balance}" readonly tabindex="-1" class="calc" title="X − Y"></td>`;
+      `<td><input data-calc="balance" data-c="${esc(code)}" type="number" value="${row.balance}" readonly tabindex="-1" class="calc" title="X â Y"></td>`;
     body.appendChild(tr);
   }
   $('#t2Count').textContent = `${shown} / ${state.size} shown`;
-  $('#cmTag').textContent = `${cmName()} · ${state.size} SKUs`;
+  $('#cmTag').textContent = `${cmName()} Â· ${state.size} SKUs`;
   for(const [code] of state) paintBalance(code);
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -667,7 +674,7 @@ $('#t2Filter').addEventListener('input', renderTab2);
 $('#zeroBtn').addEventListener('click', ()=>{ for(const r of state.values()){ r.drr=0; recompute(r); } renderTab2(); });
 
 /* ============================================================================
-   IMPORT — unchanged from original
+   IMPORT â unchanged from original
    ============================================================================ */
 const COLSPEC = {
   packSize:     {names:['Pack Size','Packsize','Pack Size (g)','Pack Size Grams'], num:true},
@@ -861,7 +868,7 @@ $('#template2Btn').addEventListener('click', ()=>{
 });
 
 /* ============================================================================
-   RUN + RESULTS — unchanged from original
+   RUN + RESULTS â unchanged from original
    ============================================================================ */
 $('#runBtn').addEventListener('click', run);
 function run(){
@@ -883,7 +890,7 @@ function renderSummary(res){
   const active=res.skus.filter(r=>r.target>0).length;
   $('#kpis').innerHTML=
     kpi(active,'SKUs scheduled')+kpi(fmt(sched),'Units scheduled')+
-    kpi(fmt(short),'Units shortfall')+kpi(cap?Math.round(sched/cap*100)+'%':'–','Horizon utilisation')+
+    kpi(fmt(short),'Units shortfall')+kpi(cap?Math.round(sched/cap*100)+'%':'â','Horizon utilisation')+
     kpi(res.weeks,'Weeks')+kpi(res.config.mode,'Mode');
   $('#summarySec').style.display='';
 }
@@ -907,7 +914,7 @@ function renderWeekly(res){
   for(const r of res.skus){
     const tot=r.perWeek.reduce((a,b)=>a+b,0);
     h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${esc(r.name)}</td><td class="l">${priPill(r.priority)}</td>`;
-    for(let w=0;w<W;w++) h+=`<td class="num">${r.perWeek[w]?fmt(r.perWeek[w]):'<span class=muted>–</span>'}</td>`;
+    for(let w=0;w<W;w++) h+=`<td class="num">${r.perWeek[w]?fmt(r.perWeek[w]):'<span class=muted>â</span>'}</td>`;
     h+=`<td class="num totcol">${fmt(tot)}</td></tr>`;
   }
   h+='</tbody>';
@@ -922,7 +929,7 @@ function renderDay(res){
   for(const r of res.skus){
     if(r.scheduled===0) continue;
     h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${priPill(r.priority)}</td>`;
-    for(let d=0;d<D;d++){ const v=r.perDay[d]; h+=`<td class="day${v?'':' z'}">${v?fmt(v):'·'}</td>`; }
+    for(let d=0;d<D;d++){ const v=r.perDay[d]; h+=`<td class="day${v?'':' z'}">${v?fmt(v):'Â·'}</td>`; }
     h+='</tr>';
   }
   h+=`<tr><td class="l muted">Line used</td><td></td>`;
@@ -940,7 +947,7 @@ function renderShortfalls(res){
   const rows=res.skus.filter(r=>r.shortfall>0);
   const sec=$('#shortSec');
   let h='<thead><tr><th class="l">SKU Code</th><th class="l">SKU Name</th><th class="l">Pri</th><th>Target</th><th>Scheduled</th><th>Shortfall</th></tr></thead><tbody>';
-  if(!rows.length){ h+=`<tr><td class="l muted" colspan="6">No shortfalls — every target fit within the horizon.</td></tr>`; }
+  if(!rows.length){ h+=`<tr><td class="l muted" colspan="6">No shortfalls â every target fit within the horizon.</td></tr>`; }
   for(const r of rows) h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${esc(r.name)}</td><td class="l">${priPill(r.priority)}</td><td class="num">${fmt(r.target)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num" style="color:var(--bad)">${fmt(r.shortfall)}</td></tr>`;
   h+='</tbody>';
   $('#shortTbl').innerHTML=h; sec.style.display='';
@@ -984,7 +991,7 @@ function loadManufacturer(id){
     for(const sku of cm.sheetData){
       const row = {
         code: sku.code, name: sku.name,
-        packSize: sku.packSize || 0,
+        packSize: sku.packSize || extractPackSize(sku.name),
         prodM1: sku.prodM1 || 0, prodM2: sku.prodM2 || 0,
         tonM1: 0, tonM2: 0,
         skuClass: sku.skuClass || 'A',
@@ -1004,7 +1011,7 @@ function loadManufacturer(id){
     state = new Map(cm.skus.map(([code,name])=>{
       const row = {
         code, name,
-        packSize:0, prodM1:0, prodM2:0, tonM1:0, tonM2:0,
+        packSize:extractPackSize(name), prodM1:0, prodM2:0, tonM1:0, tonM2:0,
         skuClass:'A', currentStock:0, drr:0, doi:0, priority:'P3',
         lineCap: d.lineCap||10000, minCap: d.minCap||1000, maxCap: d.maxCap||10000,
         target:0, supplyPlan:0, balance:0,
@@ -1029,7 +1036,7 @@ function initManufacturers(){
 // Bootstrap: init UI with fallback data, then fetch from the sheet
 initManufacturers();
 loadManufacturer(DEFAULT_CM);
-loadFromSheet(); // async — updates UI when complete
+loadFromSheet(); // async â updates UI when complete
 </script>
 </body>
 </html>
