@@ -1005,6 +1005,8 @@ function loadManufacturer(id){
         target: 0, supplyPlan: 0, balance: 0,
       };
       recompute(row);
+      if(sku.priority){ row.priority=sku.priority; row.target=computeTarget(row); row.balance=row.supplyPlan-row.target; }
+      if(sku.segment) row.segment=sku.segment;
       state.set(sku.code, row);
     }
   } else {
