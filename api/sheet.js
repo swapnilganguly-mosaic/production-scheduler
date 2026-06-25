@@ -9,20 +9,23 @@ const { google } = require('googleapis');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SHEET_NAME     = process.env.SHEET_NAME || 'Scheduler Data';
-const RANGE          = `${SHEET_NAME}!A:M`;
+const RANGE          = `${SHEET_NAME}!A:O`;
 
 // Column order in the sheet (0-indexed):
 // A=Code B=Name C=Manufacturer D=Pack Size(g) E=Prod M1 F=Prod M2
 // G=SKU Class H=Current Stock I=DRR J=DOI K=Line Cap L=Min Cap M=Max Cap
+// N=Priority O=Segment
 const COL = {
   code:0, name:1, manufacturer:2, packSize:3,
   prodM1:4, prodM2:5, skuClass:6, currentStock:7,
   drr:8, doi:9, lineCap:10, minCap:11, maxCap:12,
+  priority:13, segment:14,
 };
 const HEADER = [
   'SKU Code','SKU Name','Manufacturer','Pack Size (g)',
   'Production Plan M1','Production Plan M2',
   'SKU Class','Current Stock','DRR','DOI','Line Cap','Min Cap','Max Cap',
+  'Priority','Segment',
 ];
 
 function getAuth() {
@@ -53,6 +56,8 @@ function rowToSku(row) {
     lineCap:      num(row[COL.lineCap]) || 10000,
     minCap:       num(row[COL.minCap])  || 1000,
     maxCap:       num(row[COL.maxCap])  || 10000,
+    priority:     String(row[COL.priority] ?? '').trim() || null,
+    segment:      String(row[COL.segment] ?? '').trim() || null,
   };
 }
 
@@ -62,6 +67,7 @@ function skuToRow(sku, manufacturer) {
     sku.packSize, sku.prodM1, sku.prodM2,
     sku.skuClass, sku.currentStock, sku.drr, sku.doi,
     sku.lineCap, sku.minCap, sku.maxCap,
+    sku.priority || '', sku.segment || '',
   ];
 }
 
@@ -145,7 +151,7 @@ module.exports = async function handler(req, res) {
         if (rowIndexByCode[sku.code] !== undefined) {
           const sheetRow = rowIndexByCode[sku.code];
           batchData.push({
-            range:  `${SHEET_NAME}!A${sheetRow}:M${sheetRow}`,
+            range:  `${SHEET_NAME}!A${sheetRow}:O${sheetRow}`,
             values: [rowData],
           });
         } else {
@@ -163,7 +169,7 @@ module.exports = async function handler(req, res) {
       if (newRows.length > 0) {
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A:M`,
+          range: `${SHEET_NAME}!A:O`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: newRows },
         });
