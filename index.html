@@ -578,12 +578,16 @@ function recompute(r){
   r.tonM2       = tonnage(r.packSize, r.prodM2);
   r.supplyPlan  = +r.prodM1 || 0;
   r.balance     = r.supplyPlan - r.target;
-  // Auto-compute rmDoc from rmStock (kg) + DRR + packSize
-  if(r.rmStock!=null){
+  // Auto-compute rmDoc: prefer rmUnitsCov/DRR (BOM-based), else rmStock formula
+  if(r.rmUnitsCov!=null){
+    r.rmDoc=(r.drr>0)?Math.round(r.rmUnitsCov/r.drr*10)/10:null;
+  } else if(r.rmStock!=null){
     r.rmDoc=(r.drr>0&&r.packSize>0)?Math.round((r.rmStock*1000)/(r.drr*r.packSize)*10)/10:null;
   }
-  // Auto-compute pmDoc from pmStock (units) + DRR
-  if(r.pmStock!=null){
+  // Auto-compute pmDoc: prefer pmUnitsCov/DRR, else pmStock formula
+  if(r.pmUnitsCov!=null){
+    r.pmDoc=(r.drr>0)?Math.round(r.pmUnitsCov/r.drr*10)/10:null;
+  } else if(r.pmStock!=null){
     r.pmDoc=(r.drr>0)?Math.round(r.pmStock/r.drr*10)/10:null;
   }
   const rmVal=r.rmDoc, pmVal=r.pmDoc;
@@ -782,6 +786,8 @@ const COLSPEC = {
   volatility:   {names:['Volatility','Demand Volatility','Vol Tier'], num:false},
   rmStock:      {names:['RM Stock','RM Stock (kg)','Raw Material Stock','RM Inventory'], num:true},
   pmStock:      {names:['PM Stock','PM Stock (units)','Packaging Stock','PM Inventory'], num:true},
+  rmUnitsCov:   {names:['RM Units Coverable','RM Units Cov','RM Coverage Units'], num:true},
+  pmUnitsCov:   {names:['PM Units Coverable','PM Units Cov','PM Coverage Units'], num:true},
 };
 const norm = s => String(s).toLowerCase().replace(/[\s_]+/g,' ').trim();
 
@@ -800,7 +806,7 @@ function applyImport(header, rows){
       const i=idxMap[k]; if(i<0) continue;
       const raw=r[i]; if(raw===undefined) continue;
       const s=String(raw).trim(); if(s==='') continue;
-      if(k==='rmDoc'||k==='pmDoc'||k==='rmStock'||k==='pmStock'){ row[k]=s===''?null:num(raw); }
+      if(k==='rmDoc'||k==='pmDoc'||k==='rmStock'||k==='pmStock'||k==='rmUnitsCov'||k==='pmUnitsCov'){ row[k]=s===''?null:num(raw); }
       else if(k==='volatility'){ row[k]=s||null; }
       else { row[k]=COLSPEC[k].num?num(raw):s.toUpperCase(); }
     }
@@ -1114,6 +1120,8 @@ function loadManufacturer(id){
         pmDoc: sku.pmDoc !== undefined ? sku.pmDoc : null,
         rmStock: sku.rmStock !== undefined ? sku.rmStock : null,
         pmStock: sku.pmStock !== undefined ? sku.pmStock : null,
+        rmUnitsCov: sku.rmUnitsCov !== undefined ? sku.rmUnitsCov : null,
+        pmUnitsCov: sku.pmUnitsCov !== undefined ? sku.pmUnitsCov : null,
         volatility: sku.volatility || null,
         lineCap: sku.lineCap || d.lineCap,
         minCap:  sku.minCap  || d.minCap,
@@ -1134,6 +1142,7 @@ function loadManufacturer(id){
         skuClass:'A', currentStock:0, drr:0, doi:0, priority:'P3',
         rmDoc:null, pmDoc:null, volatility:null,
         rmStock:null, pmStock:null,
+        rmUnitsCov:null, pmUnitsCov:null,
         lineCap: d.lineCap||10000, minCap: d.minCap||1000, maxCap: d.maxCap||10000,
         target:0, supplyPlan:0, balance:0,
       };
