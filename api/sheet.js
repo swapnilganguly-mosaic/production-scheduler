@@ -9,7 +9,7 @@ const { google } = require('googleapis');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SHEET_NAME     = process.env.SHEET_NAME || 'Scheduler Data';
-const RANGE          = `${SHEET_NAME}!A:R`;
+const RANGE          = `${SHEET_NAME}!A:T`;
 
 // Column order in the sheet (0-indexed):
 // A=Code B=Name C=Manufacturer D=Pack Size(g) E=Prod M1 F=Prod M2
@@ -21,6 +21,7 @@ const COL = {
   drr:8, doi:9, lineCap:10, minCap:11, maxCap:12,
   priority:13, segment:14,
   rmDoc:15, pmDoc:16, volatility:17,
+  rmStock:18, pmStock:19,
 };
 const HEADER = [
   'SKU Code','SKU Name','Manufacturer','Pack Size (g)',
@@ -28,6 +29,7 @@ const HEADER = [
   'SKU Class','Current Stock','DRR','DOI','Line Cap','Min Cap','Max Cap',
   'Priority','Segment',
   'RM DOC','PM DOC','Volatility',
+  'RM Stock (kg)','PM Stock (units)',
 ];
 
 function getAuth() {
@@ -63,6 +65,8 @@ function rowToSku(row) {
     rmDoc:        (row[COL.rmDoc] !== undefined && row[COL.rmDoc] !== '') ? num(row[COL.rmDoc]) : null,
     pmDoc:        (row[COL.pmDoc] !== undefined && row[COL.pmDoc] !== '') ? num(row[COL.pmDoc]) : null,
     volatility:   String(row[COL.volatility] ?? '').trim() || null,
+    rmStock:      (row[COL.rmStock] !== undefined && row[COL.rmStock] !== '') ? num(row[COL.rmStock]) : null,
+    pmStock:      (row[COL.pmStock] !== undefined && row[COL.pmStock] !== '') ? num(row[COL.pmStock]) : null,
   };
 }
 
@@ -76,6 +80,8 @@ function skuToRow(sku, manufacturer) {
     sku.rmDoc !== null && sku.rmDoc !== undefined ? sku.rmDoc : '',
     sku.pmDoc !== null && sku.pmDoc !== undefined ? sku.pmDoc : '',
     sku.volatility || '',
+    sku.rmStock !== null && sku.rmStock !== undefined ? sku.rmStock : '',
+    sku.pmStock !== null && sku.pmStock !== undefined ? sku.pmStock : '',
   ];
 }
 
@@ -159,7 +165,7 @@ module.exports = async function handler(req, res) {
         if (rowIndexByCode[sku.code] !== undefined) {
           const sheetRow = rowIndexByCode[sku.code];
           batchData.push({
-            range:  `${SHEET_NAME}!A${sheetRow}:R${sheetRow}`,
+            range:  `${SHEET_NAME}!A${sheetRow}:T${sheetRow}`,
             values: [rowData],
           });
         } else {
