@@ -83,6 +83,11 @@
   tfoot .tot-row td{font-weight:700;background:var(--panel2);border-top:2px solid var(--accent);position:sticky;bottom:0;z-index:1}
   tfoot .tot-row .tot-val{color:var(--accent);font-variant-numeric:tabular-nums}
   tfoot .tot-row .tot-lbl{color:var(--muted);font-size:11.5px;font-weight:600}
+  .blocked-row td{ background:rgba(211,59,74,.07); }
+  .blocked-row td.l{ color:var(--bad); }
+  .esc-list{ display:flex;flex-direction:column;gap:6px; }
+  .esc-item{ display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:6px 10px;border-radius:8px;background:rgba(211,59,74,.09);border:1px solid rgba(211,59,74,.22); }
+  .score-val{ font-variant-numeric:tabular-nums;font-weight:650;color:var(--accent); }
   /* loading overlay */
   #loadOverlay{position:fixed;inset:0;background:rgba(244,246,251,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:100;font-size:15px;font-weight:600;color:var(--muted)}
   #loadOverlay .spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
@@ -170,6 +175,8 @@
         <div class="ctl"><label>Mode</label>
           <select id="cfgMode"><option value="max_fill">max_fill</option><option value="uniform">uniform</option></select>
         </div>
+        <div class="ctl"><label>Gate: replenish lead (days)</label><input id="cfgGate" type="number" value="21" min="0" step="1" title="RM DOC and PM DOC must be ≥ this"></div>
+        <div class="ctl"><label>Target DOC norm (days)</label><input id="cfgDocNorm" type="number" value="20" min="1" step="1" title="RMConfidence denominator (cap 1.0)"></div>
         <div class="ctl"><label>&nbsp;</label><button id="runBtn">Run scheduler ▶</button></div>
       </div>
       <div class="footnote"><b>Line Cap</b>, <b>Min Cap</b> and <b>Max Cap</b> are <b>per-SKU</b> (see the columns in the table below — edit a row to override). The line stays <b>one shared line</b>: the engine schedules against a single shared cap equal to the largest per-SKU Line Cap. <b>Min Cap</b> = min-run guard, <b>Max Cap</b> = max units of a SKU per day.</div>
@@ -193,7 +200,15 @@
             <th class="l" title="Assign A/B/C">SKU Class</th>
             <th>Current Stock</th>
             <th>DRR</th><th>DOI</th>
-            <th class="l">Prod Priority</th>
+            <th title="FG Days of Cover = Stock ÷ DRR">FG DOC</th>
+            <th class="l" title="DOI-derived priority (read-only)">DOI Pri</th>
+            <th title="Raw material days of cover">RM DOC</th>
+            <th title="Packaging material days of cover">PM DOC</th>
+            <th class="l" title="P1=Stable P2=Simmering P3=Volatile">Volatility</th>
+            <th title="1 ÷ FG_DOC">Urgency</th>
+            <th title="ABC × Volatility weight">Str.Wt</th>
+            <th title="min(RM,PM)÷norm capped 1">RMConf</th>
+            <th title="Score = Urgency × Str.Wt × RMConf — primary rank">Score ▼</th>
             <th title="Per-SKU view of the shared daily line">Line Cap</th>
             <th title="Min-run guard for this SKU">Min Cap</th>
             <th title="Max units of this SKU per day">Max Cap</th>
@@ -215,6 +230,12 @@
     <section id="warnSec" style="display:none">
       <h2>Warnings</h2>
       <div class="warns" id="warns"></div>
+    </section>
+
+
+    <section id="escalSec" style="display:none">
+      <h2>Escalation list — material cover below gate <span class="hint">these SKUs cannot be scheduled until procurement resolves the shortage</span></h2>
+      <div class="esc-list" id="escalList"></div>
     </section>
 
     <section id="weeklySec" style="display:none">
@@ -351,6 +372,8 @@ async function saveToSheet(){
       skuClass:r.skuClass, currentStock:r.currentStock,
       drr:r.drr, doi:r.doi,
       lineCap:r.lineCap, minCap:r.minCap, maxCap:r.maxCap,
+      priority:r.doiPriority||r.priority, segment:r.segment||'',
+      rmDoc:r.rmDoc, pmDoc:r.pmDoc, volatility:r.volatility||'',
     }));
     const res=await fetch('/api/sheet',{
       method:'POST',
@@ -378,6 +401,14 @@ document.getElementById('saveSheetBtn').addEventListener('click', saveToSheet);
    ============================================================================ */
 const PRIORITY_RANK = { P0:0, P1:1, P2:2, P3:3 };
 
+let REPLENISH_LEAD_TIME = 21;
+let TARGET_DOC_NORM     = 20;
+const STRATEGIC_WEIGHT = {
+  A: { P1: 1.0, P2: 1.2, P3: 1.5 },
+  B: { P1: 0.7, P2: 0.9, P3: 1.1 },
+  C: { P1: 0.4, P2: 0.5, P3: 0.6 },
+};
+
 function weekCount(cfg){ return Math.ceil(cfg.horizonDays / cfg.daysPerWeek); }
 
 function sharedLineCapacity(skus, cfg){
@@ -388,9 +419,7 @@ function sharedLineCapacity(skus, cfg){
 
 function orderSkus(skus){
   return [...skus].sort((a,b)=>{
-    const pa = PRIORITY_RANK[a.priority] ?? Number.MAX_SAFE_INTEGER;
-    const pb = PRIORITY_RANK[b.priority] ?? Number.MAX_SAFE_INTEGER;
-    if(pa!==pb) return pa-pb;
+    if(b.score!==a.score) return b.score-a.score;
     if(b.target!==a.target) return b.target-a.target;
     return a.code<b.code?-1:a.code>b.code?1:0;
   });
@@ -464,7 +493,7 @@ function finalize(ordered, perDay, cfg){
     const dayArr = perDay[i];
     const scheduled = dayArr.reduce((a,b)=>a+b,0);
     const target = Math.max(0,s.target);
-    return { code:s.code, name:s.name, priority:s.priority, target,
+    return { code:s.code, name:s.name, priority:s.priority, score:s.score||0, target,
       perDay:dayArr, perWeek:rollUpToWeeks(dayArr,cfg), scheduled,
       shortfall:Math.max(0, target-scheduled) };
   });
@@ -472,11 +501,13 @@ function finalize(ordered, perDay, cfg){
 
 function schedule(skus, cfg){
   const warnings=[];
-  const active=[], inactive=[];
+  const blocked=[], active=[], inactive=[];
   for(const s of skus){
-    if(Math.max(0,s.target)<=0){
+    if(s.blocked){
+      blocked.push(s);
+    } else if(Math.max(0,s.target)<=0){
       const perDay=new Array(cfg.horizonDays).fill(0);
-      inactive.push({code:s.code,name:s.name,priority:s.priority,target:0,perDay,
+      inactive.push({code:s.code,name:s.name,priority:s.priority,score:s.score||0,target:0,perDay,
         perWeek:rollUpToWeeks(perDay,cfg),scheduled:0,shortfall:0});
       warnings.push({code:'zero_target',skuCode:s.code,
         message:`SKU ${s.code} has a non-positive target and is excluded from the schedule.`});
@@ -497,14 +528,13 @@ function schedule(skus, cfg){
   }
   const allRows=[...scheduled,...inactive];
   allRows.sort((a,b)=>{
-    const pa=PRIORITY_RANK[a.priority]??9, pb=PRIORITY_RANK[b.priority]??9;
-    if(pa!==pb) return pa-pb;
+    if(b.score!==a.score) return (b.score||0)-(a.score||0);
     if(b.target!==a.target) return b.target-a.target;
     return a.code<b.code?-1:a.code>b.code?1:0;
   });
   const dayCapacityUsed=new Array(ecfg.horizonDays).fill(0);
   for(const r of allRows) for(let d=0;d<ecfg.horizonDays;d++) dayCapacityUsed[d]+=r.perDay[d]||0;
-  return { skus:allRows, dayCapacityUsed, weeks:weekCount(ecfg), config:ecfg, warnings };
+  return { skus:allRows, blockedSkus:blocked, dayCapacityUsed, weeks:weekCount(ecfg), config:ecfg, warnings };
 }
 
 /* ============================================================================
@@ -525,6 +555,11 @@ function computeTarget(r){
 function tonnage(packSize, units){
   return Math.round((((+packSize||0) * (+units||0)) / 1e6) * 1000) / 1000;
 }
+function numOrNull(v){
+  if(v===null||v===undefined||String(v).trim()==='') return null;
+  const n=parseFloat(String(v).replace(/,/g,'').trim());
+  return Number.isFinite(n)?n:null;
+}
 function extractPackSize(name){
   const m = (name||'').match(/(\d+(?:\.\d+)?)\s*(kgs?|gms?|g)\b/i);
   if(!m) return 0;
@@ -533,12 +568,32 @@ function extractPackSize(name){
   return (unit==='kg'||unit==='kgs') ? Math.round(val*1000) : val;
 }
 function recompute(r){
-  r.priority   = computePriority(r.doi);
-  r.target     = computeTarget(r);
-  r.tonM1      = tonnage(r.packSize, r.prodM1);
-  r.tonM2      = tonnage(r.packSize, r.prodM2);
-  r.supplyPlan = +r.prodM1 || 0;
-  r.balance    = r.supplyPlan - r.target;
+  r.doiPriority = computePriority(r.doi);
+  r.priority    = r.doiPriority;
+  r.target      = computeTarget(r);
+  r.tonM1       = tonnage(r.packSize, r.prodM1);
+  r.tonM2       = tonnage(r.packSize, r.prodM2);
+  r.supplyPlan  = +r.prodM1 || 0;
+  r.balance     = r.supplyPlan - r.target;
+  const rmVal=r.rmDoc, pmVal=r.pmDoc;
+  const rmMiss=rmVal===null||rmVal===undefined;
+  const pmMiss=pmVal===null||pmVal===undefined;
+  if(rmMiss||pmMiss){
+    r.blocked=true;
+    r.blockReason='DATA MISSING: '+[rmMiss?'RM DOC':null,pmMiss?'PM DOC':null].filter(Boolean).join(', ');
+  } else if(+rmVal<REPLENISH_LEAD_TIME){
+    r.blocked=true; r.blockReason=`RM DOC ${rmVal}d < ${REPLENISH_LEAD_TIME}d lead time`;
+  } else if(+pmVal<REPLENISH_LEAD_TIME){
+    r.blocked=true; r.blockReason=`PM DOC ${pmVal}d < ${REPLENISH_LEAD_TIME}d lead time`;
+  } else { r.blocked=false; r.blockReason=''; }
+  r.fgDoc=(r.drr>0)?Math.round((r.currentStock/r.drr)*10)/10:null;
+  r.urgency=r.fgDoc!=null?1/r.fgDoc:0;
+  const vol=r.volatility||'P2';
+  r.volatilityDefault=!r.volatility;
+  const cls=(r.skuClass||'A').toUpperCase();
+  r.strategicWeight=STRATEGIC_WEIGHT[cls]?.[vol]??STRATEGIC_WEIGHT['A']['P2'];
+  r.rmConfidence=(!rmMiss&&!pmMiss)?Math.min(Math.min(+rmVal,+pmVal)/TARGET_DOC_NORM,1.0):0;
+  r.score=r.blocked?0:(r.urgency*r.strategicWeight*r.rmConfidence);
 }
 
 /* ============================================================================
@@ -615,7 +670,10 @@ function renderTab2(){
     if(filter && !code.toLowerCase().includes(filter) && !row.name.toLowerCase().includes(filter)) continue;
     shown++;
     const cls=c=>`<option value="${c}"${row.skuClass===c?' selected':''}>${c}</option>`;
+    const vlsOpts=['P1','P2','P3'].map(v=>`<option value="${v}"${(row.volatility||'')===v?' selected':''}>${v}</option>`).join('');
+    const fmtFg=v=>v!=null?v.toFixed(1):'—';
     const tr=document.createElement('tr');
+    if(row.blocked) tr.classList.add('blocked-row');
     tr.innerHTML =
       `<td class="l code">${esc(code)}</td>`+
       `<td class="l">${esc(row.name)}</td>`+
@@ -623,7 +681,15 @@ function renderTab2(){
       `<td><input data-k="currentStock" data-c="${esc(code)}" type="number" value="${row.currentStock}" min="0" step="100"></td>`+
       `<td><input data-k="drr" data-c="${esc(code)}" type="number" value="${row.drr}"></td>`+
       `<td><input data-k="doi" data-c="${esc(code)}" type="number" value="${row.doi}"></td>`+
-      `<td class="l"><span class="pill ${row.priority}" data-calc="priority" data-c="${esc(code)}" title="Computed from DOI band">${row.priority}</span></td>`+
+      `<td class="num" data-calc="fgDoc" data-c="${esc(code)}">${fmtFg(row.fgDoc)}</td>`+
+      `<td class="l"><span class="pill ${row.doiPriority||row.priority}" data-calc="doiPriority" data-c="${esc(code)}">${row.doiPriority||row.priority}</span></td>`+
+      `<td><input data-k="rmDoc" data-c="${esc(code)}" type="number" value="${row.rmDoc!=null?row.rmDoc:''}" min="0" step="1" placeholder="—"></td>`+
+      `<td><input data-k="pmDoc" data-c="${esc(code)}" type="number" value="${row.pmDoc!=null?row.pmDoc:''}" min="0" step="1" placeholder="—"></td>`+
+      `<td class="l"><select data-k="volatility" data-c="${esc(code)}">${vlsOpts}</select>${row.volatilityDefault?'<span title="Defaulted P2" style="color:var(--warn);font-size:10px"> ⚠</span>':''}</td>`+
+      `<td class="num" data-calc="urgency" data-c="${esc(code)}">${row.urgency.toFixed(4)}</td>`+
+      `<td class="num" data-calc="strategicWeight" data-c="${esc(code)}">${row.strategicWeight.toFixed(2)}</td>`+
+      `<td class="num" data-calc="rmConfidence" data-c="${esc(code)}">${row.rmConfidence.toFixed(3)}</td>`+
+      `<td class="score-val" data-calc="score" data-c="${esc(code)}">${row.blocked?'<span style=color:var(--bad)>BLOCKED</span>':row.score.toFixed(4)}</td>`+
       `<td><input data-k="lineCap" data-c="${esc(code)}" type="number" value="${row.lineCap}" min="0" step="500"></td>`+
       `<td><input data-k="minCap" data-c="${esc(code)}" type="number" value="${row.minCap}" min="0" step="100"></td>`+
       `<td><input data-k="maxCap" data-c="${esc(code)}" type="number" value="${row.maxCap}" min="0" step="500"></td>`+
@@ -644,10 +710,17 @@ function updateCalc(code){
   const row=state.get(code); if(!row) return;
   document.querySelectorAll(`[data-calc][data-c="${cssAttr(code)}"]`).forEach(el=>{
     const f=el.dataset.calc;
-    if(f==='priority'){ el.textContent=row.priority; el.className='pill '+row.priority; el.dataset.calc='priority'; el.dataset.c=code; }
-    else if(el.tagName==='INPUT'){ el.value=row[f]; }
+    if(f==='doiPriority'||f==='priority'){ const p=row.doiPriority||row.priority; el.textContent=p; el.className='pill '+p; }
+    else if(f==='fgDoc')          { el.textContent=row.fgDoc!=null?row.fgDoc.toFixed(1):'—'; }
+    else if(f==='urgency')        { el.textContent=row.urgency.toFixed(4); }
+    else if(f==='strategicWeight'){ el.textContent=row.strategicWeight.toFixed(2); }
+    else if(f==='rmConfidence')   { el.textContent=row.rmConfidence.toFixed(3); }
+    else if(f==='score')          { el.innerHTML=row.blocked?'<span style=color:var(--bad)>BLOCKED</span>':row.score.toFixed(4); }
+    else if(el.tagName==='INPUT') { el.value=row[f]; }
     else el.textContent=row[f];
   });
+  const firstEl=document.querySelector(`[data-c="${cssAttr(code)}"]`);
+  if(firstEl){ const tr=firstEl.closest('tr'); if(tr) tr.classList.toggle('blocked-row',!!row.blocked); }
   paintBalance(code);
 }
 function paintBalance(code){
@@ -662,7 +735,9 @@ function onEdit(el){
   const c=el.dataset?.c, k=el.dataset?.k;
   if(!c||!k) return;
   const row=state.get(c); if(!row) return;
-  row[k] = (k==='skuClass') ? el.value : (+el.value||0);
+  if(k==='volatility'||k==='skuClass'){ row[k]=el.value||null; }
+  else if(k==='rmDoc'||k==='pmDoc'){ row[k]=el.value.trim()===''?null:(+el.value); }
+  else { row[k]=+el.value||0; }
   recompute(row);
   updateCalc(c);
 }
@@ -687,6 +762,9 @@ const COLSPEC = {
   lineCap:      {names:['Line Cap','Line Capacity','Daily Line Capacity'], num:true},
   minCap:       {names:['Min Cap','Min Run','Minimum Run'], num:true},
   maxCap:       {names:['Max Cap','Max Per SKU/Day','Max Per SKU Per Day','Max Per Day'], num:true},
+  rmDoc:        {names:['RM DOC','RM Doc','Raw Material DOC','RM Days of Cover'], num:true},
+  pmDoc:        {names:['PM DOC','PM Doc','Packaging DOC','PM Days of Cover'], num:true},
+  volatility:   {names:['Volatility','Demand Volatility','Vol Tier'], num:false},
 };
 const norm = s => String(s).toLowerCase().replace(/[\s_]+/g,' ').trim();
 
@@ -705,7 +783,9 @@ function applyImport(header, rows){
       const i=idxMap[k]; if(i<0) continue;
       const raw=r[i]; if(raw===undefined) continue;
       const s=String(raw).trim(); if(s==='') continue;
-      row[k] = COLSPEC[k].num ? num(raw) : s.toUpperCase();
+      if(k==='rmDoc'||k==='pmDoc'){ row[k]=s===''?null:num(raw); }
+      else if(k==='volatility'){ row[k]=s||null; }
+      else { row[k]=COLSPEC[k].num?num(raw):s.toUpperCase(); }
     }
     recompute(row);
   }
@@ -870,16 +950,30 @@ $('#template2Btn').addEventListener('click', ()=>{
 /* ============================================================================
    RUN + RESULTS — unchanged from original
    ============================================================================ */
+function renderEscalation(blockedSkus){
+  const sec=$('#escalSec'),list=$('#escalList');
+  if(!blockedSkus||!blockedSkus.length){ sec.style.display='none'; return; }
+  sec.style.display='';
+  list.innerHTML=blockedSkus.map(b=>
+    `<div class="esc-item"><span class="tag" style="background:rgba(211,59,74,.2);color:var(--bad)">BLOCKED</span><span class="code" style="font-size:12px">${esc(b.code)}</span><span style="color:var(--muted);font-size:12px">${esc(b.name)}</span><span style="margin-left:auto;color:var(--bad);font-size:12px">${esc(b.blockReason||'')}</span></div>`
+  ).join('');
+}
+
 $('#runBtn').addEventListener('click', run);
 function run(){
+  REPLENISH_LEAD_TIME=Math.max(0,+$('#cfgGate').value||21);
+  TARGET_DOC_NORM=Math.max(1,+$('#cfgDocNorm').value||20);
+  for(const r of state.values()) recompute(r);
+  renderTab2();
   const cfg=readConfig();
   const skus=[...state.values()].map(r=>({
-    code:r.code, name:r.name, priority:r.priority, target:r.target,
-    dailyLineCapacity:r.lineCap, maxPerSkuPerDay:r.maxCap, minRun:r.minCap,
+    code:r.code, name:r.name, priority:r.priority, score:r.score||0,
+    blocked:!!r.blocked, blockReason:r.blockReason||'',
+    target:r.target, dailyLineCapacity:r.lineCap, maxPerSkuPerDay:r.maxCap, minRun:r.minCap,
   }));
   const res=schedule(skus,cfg);
   window.__lastResult=res;
-  renderSummary(res); renderWarnings(res); renderWeekly(res); renderDay(res); renderShortfalls(res);
+  renderSummary(res); renderWarnings(res); renderEscalation(res.blockedSkus); renderWeekly(res); renderDay(res); renderShortfalls(res);
   requestAnimationFrame(()=> $('#weeklySec').scrollIntoView({behavior:'smooth', block:'start'}));
 }
 
@@ -972,7 +1066,7 @@ $('#dlDay').addEventListener('click', ()=>{
    INIT
    ============================================================================ */
 function clearResults(){
-  for(const id of ['summarySec','warnSec','weeklySec','daySec','shortSec']) $('#'+id).style.display='none';
+  for(const id of ['summarySec','warnSec','escalSec','weeklySec','daySec','shortSec']) $('#'+id).style.display='none';
   window.__lastResult=null;
 }
 
@@ -999,6 +1093,9 @@ function loadManufacturer(id){
         drr: sku.drr || 0, doi: sku.doi || 0,
         priority: sku.priority || 'P3',
         segment: sku.segment || '',
+        rmDoc: sku.rmDoc !== undefined ? sku.rmDoc : null,
+        pmDoc: sku.pmDoc !== undefined ? sku.pmDoc : null,
+        volatility: sku.volatility || null,
         lineCap: sku.lineCap || d.lineCap,
         minCap:  sku.minCap  || d.minCap,
         maxCap:  sku.maxCap  || d.maxCap,
@@ -1016,6 +1113,7 @@ function loadManufacturer(id){
         code, name,
         packSize:extractPackSize(name), prodM1:0, prodM2:0, tonM1:0, tonM2:0,
         skuClass:'A', currentStock:0, drr:0, doi:0, priority:'P3',
+        rmDoc:null, pmDoc:null, volatility:null,
         lineCap: d.lineCap||10000, minCap: d.minCap||1000, maxCap: d.maxCap||10000,
         target:0, supplyPlan:0, balance:0,
       };
