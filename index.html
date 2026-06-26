@@ -202,8 +202,10 @@
             <th>DRR</th><th>DOI</th>
             <th title="FG Days of Cover = Stock ÷ DRR">FG DOC</th>
             <th class="l" title="DOI-derived priority (read-only)">DOI Pri</th>
-            <th title="Raw material days of cover">RM DOC</th>
-            <th title="Packaging material days of cover">PM DOC</th>
+            <th title="RM Stock in kg — RM DOC auto-computed">RM Stock (kg)</th>
+            <th title="RM DOC = RM Stock×1000 ÷ (DRR×Pack Size) — auto-computed">RM DOC</th>
+            <th title="PM Stock in units — PM DOC auto-computed">PM Stock (units)</th>
+            <th title="PM DOC = PM Stock ÷ DRR — auto-computed">PM DOC</th>
             <th class="l" title="P1=Stable P2=Simmering P3=Volatile">Volatility</th>
             <th title="1 ÷ FG_DOC">Urgency</th>
             <th title="ABC × Volatility weight">Str.Wt</th>
@@ -374,6 +376,7 @@ async function saveToSheet(){
       lineCap:r.lineCap, minCap:r.minCap, maxCap:r.maxCap,
       priority:r.doiPriority||r.priority, segment:r.segment||'',
       rmDoc:r.rmDoc, pmDoc:r.pmDoc, volatility:r.volatility||'',
+      rmStock:r.rmStock, pmStock:r.pmStock,
     }));
     const res=await fetch('/api/sheet',{
       method:'POST',
@@ -575,6 +578,14 @@ function recompute(r){
   r.tonM2       = tonnage(r.packSize, r.prodM2);
   r.supplyPlan  = +r.prodM1 || 0;
   r.balance     = r.supplyPlan - r.target;
+  // Auto-compute rmDoc from rmStock (kg) + DRR + packSize
+  if(r.rmStock!=null){
+    r.rmDoc=(r.drr>0&&r.packSize>0)?Math.round((r.rmStock*1000)/(r.drr*r.packSize)*10)/10:null;
+  }
+  // Auto-compute pmDoc from pmStock (units) + DRR
+  if(r.pmStock!=null){
+    r.pmDoc=(r.drr>0)?Math.round(r.pmStock/r.drr*10)/10:null;
+  }
   const rmVal=r.rmDoc, pmVal=r.pmDoc;
   const rmMiss=rmVal===null||rmVal===undefined;
   const pmMiss=pmVal===null||pmVal===undefined;
@@ -683,8 +694,10 @@ function renderTab2(){
       `<td><input data-k="doi" data-c="${esc(code)}" type="number" value="${row.doi}"></td>`+
       `<td class="num" data-calc="fgDoc" data-c="${esc(code)}">${fmtFg(row.fgDoc)}</td>`+
       `<td class="l"><span class="pill ${row.doiPriority||row.priority}" data-calc="doiPriority" data-c="${esc(code)}">${row.doiPriority||row.priority}</span></td>`+
-      `<td><input data-k="rmDoc" data-c="${esc(code)}" type="number" value="${row.rmDoc!=null?row.rmDoc:''}" min="0" step="1" placeholder="—"></td>`+
-      `<td><input data-k="pmDoc" data-c="${esc(code)}" type="number" value="${row.pmDoc!=null?row.pmDoc:''}" min="0" step="1" placeholder="—"></td>`+
+      `<td><input data-k="rmStock" data-c="${esc(code)}" type="number" value="${row.rmStock!=null?row.rmStock:''}" min="0" step="0.1" placeholder="—" title="kg"></td>`+
+      `<td class="num calc" data-calc="rmDoc" data-c="${esc(code)}" title="RM Stock×1000÷(DRR×Pack Size)">${row.rmDoc!=null?row.rmDoc.toFixed(1):'—'}</td>`+
+      `<td><input data-k="pmStock" data-c="${esc(code)}" type="number" value="${row.pmStock!=null?row.pmStock:''}" min="0" step="1" placeholder="—" title="units"></td>`+
+      `<td class="num calc" data-calc="pmDoc" data-c="${esc(code)}" title="PM Stock÷DRR">${row.pmDoc!=null?row.pmDoc.toFixed(1):'—'}</td>`+
       `<td class="l"><select data-k="volatility" data-c="${esc(code)}">${vlsOpts}</select>${row.volatilityDefault?'<span title="Defaulted P2" style="color:var(--warn);font-size:10px"> ⚠</span>':''}</td>`+
       `<td class="num" data-calc="urgency" data-c="${esc(code)}">${row.urgency.toFixed(4)}</td>`+
       `<td class="num" data-calc="strategicWeight" data-c="${esc(code)}">${row.strategicWeight.toFixed(2)}</td>`+
@@ -712,6 +725,8 @@ function updateCalc(code){
     const f=el.dataset.calc;
     if(f==='doiPriority'||f==='priority'){ const p=row.doiPriority||row.priority; el.textContent=p; el.className='pill '+p; }
     else if(f==='fgDoc')          { el.textContent=row.fgDoc!=null?row.fgDoc.toFixed(1):'—'; }
+    else if(f==='rmDoc')           { el.textContent=row.rmDoc!=null?row.rmDoc.toFixed(1):'—'; }
+    else if(f==='pmDoc')           { el.textContent=row.pmDoc!=null?row.pmDoc.toFixed(1):'—'; }
     else if(f==='urgency')        { el.textContent=row.urgency.toFixed(4); }
     else if(f==='strategicWeight'){ el.textContent=row.strategicWeight.toFixed(2); }
     else if(f==='rmConfidence')   { el.textContent=row.rmConfidence.toFixed(3); }
@@ -736,7 +751,7 @@ function onEdit(el){
   if(!c||!k) return;
   const row=state.get(c); if(!row) return;
   if(k==='volatility'||k==='skuClass'){ row[k]=el.value||null; }
-  else if(k==='rmDoc'||k==='pmDoc'){ row[k]=el.value.trim()===''?null:(+el.value); }
+  else if(k==='rmStock'||k==='pmStock'){ row[k]=el.value.trim()===''?null:(+el.value); }
   else { row[k]=+el.value||0; }
   recompute(row);
   updateCalc(c);
@@ -765,6 +780,8 @@ const COLSPEC = {
   rmDoc:        {names:['RM DOC','RM Doc','Raw Material DOC','RM Days of Cover'], num:true},
   pmDoc:        {names:['PM DOC','PM Doc','Packaging DOC','PM Days of Cover'], num:true},
   volatility:   {names:['Volatility','Demand Volatility','Vol Tier'], num:false},
+  rmStock:      {names:['RM Stock','RM Stock (kg)','Raw Material Stock','RM Inventory'], num:true},
+  pmStock:      {names:['PM Stock','PM Stock (units)','Packaging Stock','PM Inventory'], num:true},
 };
 const norm = s => String(s).toLowerCase().replace(/[\s_]+/g,' ').trim();
 
@@ -783,7 +800,7 @@ function applyImport(header, rows){
       const i=idxMap[k]; if(i<0) continue;
       const raw=r[i]; if(raw===undefined) continue;
       const s=String(raw).trim(); if(s==='') continue;
-      if(k==='rmDoc'||k==='pmDoc'){ row[k]=s===''?null:num(raw); }
+      if(k==='rmDoc'||k==='pmDoc'||k==='rmStock'||k==='pmStock'){ row[k]=s===''?null:num(raw); }
       else if(k==='volatility'){ row[k]=s||null; }
       else { row[k]=COLSPEC[k].num?num(raw):s.toUpperCase(); }
     }
@@ -1095,6 +1112,8 @@ function loadManufacturer(id){
         segment: sku.segment || '',
         rmDoc: sku.rmDoc !== undefined ? sku.rmDoc : null,
         pmDoc: sku.pmDoc !== undefined ? sku.pmDoc : null,
+        rmStock: sku.rmStock !== undefined ? sku.rmStock : null,
+        pmStock: sku.pmStock !== undefined ? sku.pmStock : null,
         volatility: sku.volatility || null,
         lineCap: sku.lineCap || d.lineCap,
         minCap:  sku.minCap  || d.minCap,
@@ -1114,6 +1133,7 @@ function loadManufacturer(id){
         packSize:extractPackSize(name), prodM1:0, prodM2:0, tonM1:0, tonM2:0,
         skuClass:'A', currentStock:0, drr:0, doi:0, priority:'P3',
         rmDoc:null, pmDoc:null, volatility:null,
+        rmStock:null, pmStock:null,
         lineCap: d.lineCap||10000, minCap: d.minCap||1000, maxCap: d.maxCap||10000,
         target:0, supplyPlan:0, balance:0,
       };
