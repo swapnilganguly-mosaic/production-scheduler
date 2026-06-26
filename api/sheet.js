@@ -9,7 +9,7 @@ const { google } = require('googleapis');
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SHEET_NAME     = process.env.SHEET_NAME || 'Scheduler Data';
-const RANGE          = `${SHEET_NAME}!A:O`;
+const RANGE          = `${SHEET_NAME}!A:R`;
 
 // Column order in the sheet (0-indexed):
 // A=Code B=Name C=Manufacturer D=Pack Size(g) E=Prod M1 F=Prod M2
@@ -20,12 +20,14 @@ const COL = {
   prodM1:4, prodM2:5, skuClass:6, currentStock:7,
   drr:8, doi:9, lineCap:10, minCap:11, maxCap:12,
   priority:13, segment:14,
+  rmDoc:15, pmDoc:16, volatility:17,
 };
 const HEADER = [
   'SKU Code','SKU Name','Manufacturer','Pack Size (g)',
   'Production Plan M1','Production Plan M2',
   'SKU Class','Current Stock','DRR','DOI','Line Cap','Min Cap','Max Cap',
   'Priority','Segment',
+  'RM DOC','PM DOC','Volatility',
 ];
 
 function getAuth() {
@@ -58,6 +60,9 @@ function rowToSku(row) {
     maxCap:       num(row[COL.maxCap])  || 10000,
     priority:     String(row[COL.priority] ?? '').trim() || null,
     segment:      String(row[COL.segment] ?? '').trim() || null,
+    rmDoc:        (row[COL.rmDoc] !== undefined && row[COL.rmDoc] !== '') ? num(row[COL.rmDoc]) : null,
+    pmDoc:        (row[COL.pmDoc] !== undefined && row[COL.pmDoc] !== '') ? num(row[COL.pmDoc]) : null,
+    volatility:   String(row[COL.volatility] ?? '').trim() || null,
   };
 }
 
@@ -68,6 +73,9 @@ function skuToRow(sku, manufacturer) {
     sku.skuClass, sku.currentStock, sku.drr, sku.doi,
     sku.lineCap, sku.minCap, sku.maxCap,
     sku.priority || '', sku.segment || '',
+    sku.rmDoc !== null && sku.rmDoc !== undefined ? sku.rmDoc : '',
+    sku.pmDoc !== null && sku.pmDoc !== undefined ? sku.pmDoc : '',
+    sku.volatility || '',
   ];
 }
 
@@ -151,7 +159,7 @@ module.exports = async function handler(req, res) {
         if (rowIndexByCode[sku.code] !== undefined) {
           const sheetRow = rowIndexByCode[sku.code];
           batchData.push({
-            range:  `${SHEET_NAME}!A${sheetRow}:O${sheetRow}`,
+            range:  `${SHEET_NAME}!A${sheetRow}:R${sheetRow}`,
             values: [rowData],
           });
         } else {
