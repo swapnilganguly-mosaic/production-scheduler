@@ -118,8 +118,8 @@ tr:last-child td{border-bottom:none}
   <div class="formula-body" id="formulaBody">
     <div class="formula-main">Score = Urgency x Strategic Weight x RM Confidence</div>
     <div class="formula-row"><b>Urgency</b> = 1 / FG DOC &nbsp;|&nbsp; <b>FG DOC</b> (days) = FG Stock (units) / DRR (units/day)</div>
-    <div class="formula-row"><b>RM Confidence</b> = min(RM DOC, PM DOC) / Target RM/PM SROC &nbsp;[capped at 1]</div>
-    <div class="formula-row"><b>RM DOC</b> = min over all RM materials of [ RM Stock (kg) / (RM% x Pack Size kg xDRR) ] &nbsp;&mdash; bottleneck material</div>
+    <div class="formula-row"><b>RM Confidence</b> = min(RM DOC, PM DOC) / Target RM DOC &nbsp;[capped at 1]</div>
+    <div class="formula-row"><b>RM DOC</b> = min over all RM materials of [ RM Stock (kg) / (RM% x Pack Size kg x DRR) ] &nbsp;&mdash; bottleneck material</div>
     <div class="formula-row"><b>PM DOC</b> = min over all PM materials of [ PM Stock (units) / (PM Qty/unit x DRR) ] &nbsp;&mdash; bottleneck material</div>
     <div class="formula-row" style="margin-top:6px"><b>DRR</b> = Jun Units/day (embedded) &nbsp;|&nbsp; <b>RM/PM Stock</b> = live sync from MRP Tool &nbsp;|&nbsp; <b>FG Stock</b> = manual upload</div>
     <table class="formula-tbl" style="margin-top:10px">
@@ -371,20 +371,7 @@ const DRR_DATA = {
   'MWLJGNP.00022.B0_N':6.9286,'MWLJNTP.00636.BO_N':29.6429,'MWLJDCP.0001.B0_N':259.0714,
   'MWLJDCP.00011.B0_N':103.6429,'MWLJHYP.0001.B0_N':5.8571,'MWLJSKP.0002.B0_N':22.8571,
   'MWLJSKP.0003.B0_N':123.2857,'MWLJSKP.0007.B0_N':10.9286,'MWLJNTP.00553.BO_N':241.8571,
-  'MWLJNTS.00064.B0_N':43.6429,'MWLJNTP.00501.B0_N':0.0,'MWLJNTP.000810.B0_N':178.9286,
-  'MWLJNTP.00617.BO_N':49.9286,'MWLJNTP.00618.BO_N':61.5,'MWLJNTP.000809.B0_N':41.6429,
-  'MWLJNTP.00533.B0_N':62.6429,'MWLJNTP.00534.B0_N':75.0,'MWLJNTK.00367.B0_N':846.5,
-  'MWLJNTP.000709.B0_N':134.0,'MWLJNTP.000836.B0_N':153.0714,'MWLJNTP.00484.B0_N':0.0,
-  'MWLJNTP.00485.B0_N':0.0,'MWLJNTP.00608.BO_N':5.8571,'MWLJNTP.00609.BO_N':31.4286,
-  'MWLJNTP.00610.BO_N':30.3571,'MWLJNTP.00698.B0_N':260.1429,'MWLJNTP.000796.B0_N':462.0714,
-  'MWLJNTP.00527.BO_N':10.7857,'MWLJHYP.0006.B0_N':48.6429,'MWLJNTP.00124.B0_N':0.0,
-  'MWLJNTS.0006.BO_N':31.5,'MWLJNTS.0001.B0_N':336.2857,'MWLJNTS.0002.B0_N':73.6429,
-  'MWLJNTP.00551.BO_N':160.1429,'MWLJNTP.00699.B0_N':22.1429,'MWLJNTP.00615.BO_N':88.8571,
-  'MWLJNTP.00616.BO_N':52.7143,'MWLJNTP.000820.B0_N':117.1429,'MWLJNTP.00562.B0_N':0.0,
-  'MWLJNTP.00563.B0_N':527.9286,'MWLJNTP.00574.BO_N':0.5714,'MWLJNTP.00591.B0_N':55.3571,
-  'MWLJNTP.00592.B0_N':531.4286,'MWLJNTP.00678.B0_N':0.6429,'MWLJNTS.00043.B0_N':110.0714,
-  'MWLJNTS.0008.B0_N':9.9286,'MWLJNTP.00406.B0_N':0.0,'MWLJNTP.00586.BO_N':0.0714,
-  'MWLJNTS.0003.B0_N':4.1429,'MWLJNTS.00040.B0_N':1.0,'MWLJNTP.00541.BO_N':12.5,
+  'MWLJNTS.00064.B0_N':43.6429,'MWLJNTP.00501.B0_N':0.0,'MWLJNTP.000810.B0_N':178.9286,'MWLJNTP.00617.BO_N':49.9286,'MWLJNTP.00618.BO_N':61.5,'MWLJNTP.000809.B0_N':41.6429,'MWLJNTP.00533.B0_N':62.6429,'MWLJNTP.00534.B0_N':75.0,'MWLJNTK.00367.B0_N':846.5,'MWLJNTP.000709.B0_N':134.0,'MWLJNTP.000836.B0_N':153.0714,'MWLJNTP.00484.B0_N':0.0,'MWLJNTP.00485.B0_N':0.0,'MWLJNTP.00608.BO_N':5.8571,'MWLJNTP.00609.BO_N':31.4286,'MWLJNTP.00610.BO_N':30.3571,'MWLJNTP.00698.B0_N':260.1429,'MWLJNTP.000796.B0_N':462.0714,'MWLJNTP.00527.BO_N':10.7857,'MWLJHYP.0006.B0_N':48.6429,'MWLJNTP.00124.B0_N':0.0,'MWLJNTS.0006.BO_N':31.5,'MWLJNTS.0001.B0_N':336.2857,'MWLJNTS.0002.B0_N':73.6429,'MWLJNTP.00551.BO_N':160.1429,'MWLJNTP.00699.B0_N':22.1429,'MWLJNTP.00615.BO_N':88.8571,'MWLJNTP.00616.BO_N':52.7143,'MWLJNTP.000820.B0_N':117.1429,'MWLJNTP.00562.B0_N':0.0,'MWLJNTP.00563.B0_N':527.9286,'MWLJNTP.00574.BO_N':0.5714,'MWLJNTP.00591.B0_N':55.3571,'MWLJNTP.00592.B0_N':531.4286,'MWLJNTP.00678.B0_N':0.6429,'MWLJNTS.00043.B0_N':110.0714,'MWLJNTS.0008.B0_N':9.9286,'MWLJNTP.00406.B0_N':0.0,'MWLJNTP.00586.BO_N':0.0714,'MWLJNTS.0003.B0_N':4.1429,'MWLJNTS.00040.B0_N':1.0,'MWLJNTP.00541.BO_N':12.5,
   'MWLJNTP.00664.BO_N':35.3571,'MWLJNTP.00700.B0_N':36.2857,'MWBWNTP.00356.B0_N':0.0,
   'MWBWNTP.00357.B0_N':0.0,'MWLJNTP.00605.BO_N':117.0714,'MWLJGNP.00021.B0_N':0.0,
   'MWLJGNP.00051.B0_N':0.2143,'MWLJGNP.00059.B0_N':2.4286,'MWLJSKP.0034.B0_N':0.0,
@@ -429,7 +416,7 @@ function parseRow(line) {
 }
 function n(v){const x=parseFloat(v);return isNaN(x)?0:x;}
 
-apync function loadGSheet() {
+async function loadGSheet() {
   setStatus('Loading MRP data...','warn');
   try {
     const [skuCsv,rmCsv,pmCsv,drrCsv] = await Promise.all([
@@ -460,7 +447,7 @@ apync function loadGSheet() {
       const code=r['SKU Code']||r['SKU']||'';
       if(!code) return;
       let qty=n(r['Qty Per Unit']||r['qty_per_unit']||r['RM Qty (kg/unit)']||0);
-      if(!qty){
+      if('qty){
         const pct=n(r['RM % IN FG']||r['RM%']||0);
         const pkKg=n(r['Pack Size (g)']||r['Pack Size']||(skuMap[code]?.packSize||0))/1000;
         qty=pct*pkKg;
@@ -820,6 +807,7 @@ window.addEventListener('message', e => {
 document.getElementById('cfgTargetDoc').addEventListener('change',recompute);
 rows=computeRows();
 renderSummaryCards();
+renderScoreTable();
 loadGSheet();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
