@@ -82,7 +82,7 @@ tr:last-child td{border-bottom:none}
 </header>
 
 <div id="statusBar">
-  <span class="status-dot" id="gsDot"></span><span id="statusText">Loading MRP data from Google Sheets...</span>
+  <span class="status-dot" id="gsDot"></span><span id="statusText">Ready â upload stock file or refresh MRP data</span>
   <span class="mrp-status" id="mrpSyncBadge"> MRP Live Sync</span>
   <span style="margin-left:auto;color:#94a3b8;font-size:11px" id="lastUpdated"></span>
 </div>
@@ -147,7 +147,7 @@ tr:last-child td{border-bottom:none}
         <th class="num">PM Stock</th><th class="num">PM Req (/30d)</th><th class="num">PM DOC</th>
         <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
       </tr></thead>
-      <tbody id="scoreBody"><tr><td colspan="18" class="empty"><h3>Loading...</h3></td></tr></tbody>
+      <tbody id="scoreBody"></tbody>
     </table>
   </div>
 </div>
@@ -269,9 +269,18 @@ let schedPlan = [];
 // --- GSheet fetch ------------------------------------------------------------
 async function gvizFetch(tab) {
   const url = `https://docs.google.com/spreadsheets/d/${MRP_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`Failed: ${tab}`);
-  return r.text();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 9000);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    if (!r.ok) throw new Error(`Failed: ${tab}`);
+    return r.text();
+  } catch(e) {
+    if (e.name === 'AbortError') throw new Error(`Timeout loading tab: ${tab}`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 function parseCsv(text) {
   const lines = text.trim().split('\n');
@@ -629,7 +638,7 @@ function showTab(id,btn){
 function setStatus(msg,state){
   document.getElementById('statusText').textContent=msg;
   const d=document.getElementById('gsDot');
-  d.className='status-dot'+(state==='ok'?' ok':state==='warn'' warn':'');
+  d.className='status-dot'+(state==='ok'?' ok':state==='warn'?' warn':'');
 }
 function downloadCSV(){
   const hdr=['Rank','SKU Code','SKU Name','Class','Priority','FG Stock','DRR','FG DOC',
@@ -683,12 +692,4 @@ window.addEventListener('message', e => {
 });
 
 // --- Init ---------------------------------------------------------------------
-document.getElementById('cfgTargetDoc').addEventListener('change',recompute);
-rows=computeRows();
-renderSummaryCards();
-renderScoreTable();
-loadGSheet();
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-</body>
-</html>
+document.getElementById('cfgTargetDoc').add
