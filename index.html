@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Production Scheduler â Mosaic Wellness</title>
+<title>Production Scheduler | Mosaic Wellness</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;background:#f4f6fb;color:#1a1a2e}
@@ -82,15 +82,15 @@ tr:last-child td{border-bottom:none}
 </header>
 
 <div id="statusBar">
-  <span class="status-dot" id="gsDot"></span><span id="statusText">Loading MRP data from Google Sheetsâ¦</span>
-  <span class="mrp-status" id="mrpSyncBadge">ð MRP Live Sync</span>
+  <span class="status-dot" id="gsDot"></span><span id="statusText">Loading MRP data from Google Sheets...</span>
+  <span class="mrp-status" id="mrpSyncBadge"> MRP Live Sync</span>
   <span style="margin-left:auto;color:#94a3b8;font-size:11px" id="lastUpdated"></span>
 </div>
 
 <div class="import-bar">
   <label>Stock Upload (FG / RM / PM):</label>
   <input type="file" id="stockFile" accept=".xlsx,.csv" onchange="importStock(this)">
-  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code Â· FG Stock (units) Â· RM Stock (kg) Â· PM Stock (units)</span>
+  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code . FG Stock (units) . RM Stock (kg) . PM Stock (units)</span>
   <button class="btn secondary" onclick="downloadTemplate()">Download Template</button>
   <button class="btn green" onclick="loadGSheet()">&#8635; Refresh MRP Data</button>
 </div>
@@ -113,14 +113,14 @@ tr:last-child td{border-bottom:none}
 <!-- Formula Panel -->
 <div class="formula-panel">
   <div class="formula-toggle" onclick="toggleFormula()">
-    ð Score Formula &nbsp;<span id="formulaArrow">â¶</span>
+     Score Formula &nbsp;<span id="formulaArrow">&#9654;</span>
   </div>
   <div class="formula-body" id="formulaBody">
-    <div class="formula-main">Score = Urgency Ã Strategic Weight Ã RM Confidence</div>
-    <div class="formula-row"><b>Urgency</b> = 1 / FG DOC &nbsp;|&nbsp; <b>FG DOC</b> (days) = FG Stock (units) Ã· DRR (units/day)</div>
-    <div class="formula-row"><b>RM Confidence</b> = min(RM DOC, PM DOC) / Target RM DOC &nbsp;[capped at 1]</div>
-    <div class="formula-row"><b>RM DOC</b> = min over all RM materials of [ RM Stock (kg) Ã· (RM% Ã Pack Size kg Ã DRR) ] &nbsp;â bottleneck material</div>
-    <div class="formula-row"><b>PM DOC</b> = min over all PM materials of [ PM Stock (units) Ã· (PM Qty/unit Ã DRR) ] &nbsp;â bottleneck material</div>
+    <div class="formula-main">Score = Urgency x Strategic Weight x RM Confidence</div>
+    <div class="formula-row"><b>Urgency</b> = 1 / FG DOC &nbsp;|&nbsp; <b>FG DOC</b> (days) = FG Stock (units) / DRR (units/day)</div>
+    <div class="formula-row"><b>RM Confidence</b> = min(RM DOC, PM DOC) / Target RM/PM SROC &nbsp;[capped at 1]</div>
+    <div class="formula-row"><b>RM DOC</b> = min over all RM materials of [ RM Stock (kg) / (RM% x Pack Size kg xDRR) ] &nbsp;&mdash; bottleneck material</div>
+    <div class="formula-row"><b>PM DOC</b> = min over all PM materials of [ PM Stock (units) / (PM Qty/unit x DRR) ] &nbsp;&mdash; bottleneck material</div>
     <div class="formula-row" style="margin-top:6px"><b>DRR</b> = Jun Units/day (embedded) &nbsp;|&nbsp; <b>RM/PM Stock</b> = live sync from MRP Tool &nbsp;|&nbsp; <b>FG Stock</b> = manual upload</div>
     <table class="formula-tbl" style="margin-top:10px">
       <tr><th>Class \ Priority</th><th>P1</th><th>P2</th><th>P3</th></tr>
@@ -134,7 +134,7 @@ tr:last-child td{border-bottom:none}
 <!-- Priority Scoring Tab -->
 <div id="tab-priority" class="tab-content active">
   <div class="filter-bar">
-    <input type="text" id="scoreFilter" placeholder="Filter by SKU code or nameâ¦" oninput="renderScoreTable()">
+    <input type="text" id="scoreFilter" placeholder="Filter by SKU code or name..." oninput="renderScoreTable()">
   </div>
   <div class="summary-row" id="summaryCards"></div>
   <div class="tbl-wrap">
@@ -147,7 +147,7 @@ tr:last-child td{border-bottom:none}
         <th class="num">PM Stock</th><th class="num">PM Req (/30d)</th><th class="num">PM DOC</th>
         <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
       </tr></thead>
-      <tbody id="scoreBody"><tr><td colspan="18" class="empty"><h3>Loadingâ¦</h3></td></tr></tbody>
+      <tbody id="scoreBody"><tr><td colspan="18" class="empty"><h3>Loading...</h3></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -155,7 +155,7 @@ tr:last-child td{border-bottom:none}
 <!-- Production Plan Tab -->
 <div id="tab-planning" class="tab-content">
   <div class="sched-controls">
-    <input type="text" id="planFilter" placeholder="Filter SKUsâ¦" oninput="renderPlanTable()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:220px">
+    <input type="text" id="planFilter" placeholder="Filter SKUs..." oninput="renderPlanTable()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:220px">
     <button class="btn" onclick="runSchedule()">Run Schedule</button>
     <span style="font-size:12px;color:#64748b" id="schedStatus"></span>
   </div>
@@ -169,7 +169,7 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <script>
-// âââ JAS Class Lookup (216 SKUs) âââââââââââââââââââââââââââââââââââââââââââââ
+// --- JAS Class Lookup (216 SKUs) ---------------------------------------------
 const JAS_CLASS = {
   'MWMMHRP.0004.AAAA.B0_N':{c:'A',p:'P1',w:1.0},'MWLJNTP.0003.B0_N':{c:'A',p:'P1',w:1.0},
   'MWMMHRP.0008.AAAA.B0_R':{c:'A',p:'P1',w:1.0},'MWBWHFP.00575.B0_N':{c:'A',p:'P2',w:1.2},
@@ -281,7 +281,7 @@ const JAS_CLASS = {
   'MWMMSKP.5065.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMSKP.5066.AAAABO_N':{c:'C',p:'P3',w:0.6}
 };
 
-// âââ Embedded DRR â Jun Units/day (col H of DRR Excel) âââââââââââââââââââââââ
+// --- Embedded DRR &mdash; Jun Units/day (col H of DRR Excel) -----------------------
 const DRR_DATA = {
   'MWBWSKP.00265.B0_N':233.6429,'MWBWSKP.00401.B0_N':138.3571,'MWBWSKP.00427.B0_N':181.8571,
   'MWBWSKP.00428.B0_N':540.4286,'MWBWSKP.00436.B0_N':1180.6429,'MWBWSKP.00532.B0_N':40.2143,
@@ -303,9 +303,7 @@ const DRR_DATA = {
   'MWBWHFP.00707.B0_N':29.6429,'MWBWHFP.00161.B0_N':51.7857,'MWBWHFP.0018.B0_N':152.2857,
   'MWBWHFP.0019.B0_N':88.8571,'MWBWHFP.0020.B0_N':43.2857,'MWBWHFP.00225.B0_N':18.2857,
   'MWBWHFP.00574.B0_N':18.8571,'MWBWHFP.00609.B0_N':4.2143,'MWBWHFP.00644.B0_N':34.5,
-  'MWBWSKP.00587.B0_N':103.7143,'MWBWHFP.00204.B0_N':316.3571,'MWBWHFP.00310.B0_N':101.9286,'MWBWHFP.00541.B0_N':101.9286,'MWBWHFP.00575.B0_N':3086.4286,'MWBWHFP.00635.B0_N':37.3571,
-  'MWBWHFP.00637.B0_N':559.3571,'MWBWHFP.00672.B0_N':642.9286,'MWBWHFP.00145.B0_N':639.0714,
-  'MWBWHFP.00531.B0_N':2905.4286,'MWBWHFP.00711.B0_N':405.9286,'MWBWNTP.00345.B0_N':125.3571,
+  'MWBWSKP.00587.B0_N':103.7143,'MWBWHFP.00204.B0_N':316.3571,'MWBWHFP.00310.B0_N':101.9286,'MWBWHFP.00541.B0_N':101.9286,'MWBWHFP.00575.B0_N':3086.4286,'MWBWHFP.00635.B0_N':37.3571,'MWBWHFP.00637.B0_N':559.3571,'MWBWHFP.00672.B0_N':642.9286,'MWBWHFP.00145.B0_N':639.0714,'MWBWHFP.00531.B0_N':2905.4286,'MWBWHFP.00711.B0_N':405.9286,'MWBWNTP.00345.B0_N':125.3571,
   'MWBWICP.00334.B0_N':6.0714,'MWBWNTP.00168.B0_N':94.9286,'MWBWNTP.00347.B0_N':32.3571,
   'MWBWNTP.00348.B0_N':72.5714,'MWBWPRP.00004.B0_N':10.5714,'MWBWSKP.00132.B0_N':101.7857,
   'MWBWNTP.00341.B0_N':194.7143,'MWBWNTP.00356.B0_N':340.5,'MWBWNTP.00357.B0_N':91.5714,
@@ -402,7 +400,7 @@ let stockData = {};
 let rows      = [];
 let schedPlan = [];
 
-// âââ GSheet fetch ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- GSheet fetch ------------------------------------------------------------
 async function gvizFetch(tab) {
   const url = `https://docs.google.com/spreadsheets/d/${MRP_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
   const r = await fetch(url);
@@ -431,8 +429,8 @@ function parseRow(line) {
 }
 function n(v){const x=parseFloat(v);return isNaN(x)?0:x;}
 
-async function loadGSheet() {
-  setStatus('Loading MRP dataâ¦','warn');
+apync function loadGSheet() {
+  setStatus('Loading MRP data...','warn');
   try {
     const [skuCsv,rmCsv,pmCsv,drrCsv] = await Promise.all([
       gvizFetch(GS_TABS.skuMaster), gvizFetch(GS_TABS.rmBom),
@@ -479,7 +477,7 @@ async function loadGSheet() {
     });
 
     gsData={skuMap,drrMap,rmBomMap,pmBomMap};
-    setStatus(`MRP data loaded â ${Object.keys(skuMap).length} SKUs`,'ok');
+    setStatus(`MRP data loaded &mdash; ${Object.keys(skuMap).length} SKUs`,'ok');
     document.getElementById('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
     recompute();
   } catch(e) {
@@ -488,7 +486,7 @@ async function loadGSheet() {
   }
 }
 
-// âââ Stock upload âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Stock upload -------------------------------------------------------------
 function importStock(input) {
   const file=input.files[0]; if(!file) return;
   const ext=file.name.split('.').pop().toLowerCase();
@@ -518,11 +516,11 @@ function processStockCsv(text) {
       pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
     };
   });
-  setStatus(`Stock loaded â ${Object.keys(stockData).length} SKUs`,'ok');
+  setStatus(`Stock loaded &mdash; ${Object.keys(stockData).length} SKUs`,'ok');
   recompute();
 }
 
-// âââ Core scoring âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Core scoring -------------------------------------------------------------
 function computeRows() {
   const targetDoc = n(document.getElementById('cfgTargetDoc').value) || 60;
   const codes = new Set([
@@ -548,7 +546,7 @@ function computeRows() {
     const fgStock = stk.fgStock ?? 0;
     const fgDoc   = drr > 0 ? fgStock / drr : null;
 
-    // ââ RM DOC: per-material bottleneck using live MRP stock ââ
+    // -- RM DOC: per-material bottleneck using live MRP stock --
     let rmDoc = null, rmStockDisplay = 0, rmReq30Display = 0;
     const rmBomList = mrpData?.rmBom[code];
     if (rmBomList && rmBomList.length > 0 && drr > 0 && packSizeKg > 0) {
@@ -569,7 +567,7 @@ function computeRows() {
       if (rmReq30Display > 0) rmDoc = rmStockUp / (rmReq30Display / 30);
     }
 
-    // ââ PM DOC: per-material bottleneck using live MRP stock ââ
+    // -- PM DOC: per-material bottleneck using live MRP stock --
     let pmDoc = null, pmStockDisplay = 0, pmReq30Display = 0;
     const pmBomList = mrpData?.pmBom[code];
     if (pmBomList && pmBomList.length > 0 && drr > 0) {
@@ -590,7 +588,7 @@ function computeRows() {
       if (pmReq30Display > 0) pmDoc = pmStockUp / (pmReq30Display / 30);
     }
 
-    // Score = Urgency Ã Strategic Weight Ã RM Confidence
+    // Score = Urgency x Strategic Weight x RM Confidence
     const urgency = (fgDoc != null && fgDoc > 0) ? 1 / fgDoc : 0;
     const stratWt = jas.w;
     const docVals = [rmDoc, pmDoc].filter(d => d !== null);
@@ -612,7 +610,7 @@ function computeRows() {
 
 function recompute(){rows=computeRows();renderScoreTable();renderSummaryCards();}
 
-// âââ Render âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Render -------------------------------------------------------------------
 function renderScoreTable() {
   const filter=document.getElementById('scoreFilter').value.toLowerCase();
   const clsF=document.getElementById('cfgClass').value;
@@ -626,8 +624,8 @@ function renderScoreTable() {
     return true;
   });
 
-  const fmt=(v,d=1)=>v==null?'â':(+v).toFixed(d);
-  const fmtI=v=>v==null?'â':Math.round(v).toLocaleString();
+  const fmt=(v,d=1)=>v==null?'\u2014':(+v).toFixed(d);
+  const fmtI=v=>v==null?'\u2014':Math.round(v).toLocaleString();
 
   const tbody=document.getElementById('scoreBody');
   if(!filtered.length){
@@ -637,7 +635,7 @@ function renderScoreTable() {
     <tr>
       <td style="color:#94a3b8">${i+1}</td>
       <td style="font-family:monospace;font-size:11px">${r.code}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">â</span>'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">&mdash;</span>'}</td>
       <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
       <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
       <td class="num">${fmtI(r.fgStock)}</td>
@@ -688,7 +686,7 @@ function renderSummaryCards(){
     <div class="card"><h4>Avg RM Confidence</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
 }
 
-// âââ Production plan ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Production plan ----------------------------------------------------------
 function runSchedule(){
   const wks=parseInt(document.getElementById('cfgHorizon').value)||8;
   const capKg=n(document.getElementById('cfgLineCap').value)||5000;
@@ -720,7 +718,7 @@ function runSchedule(){
 function renderPlanTable(){
   const filter=document.getElementById('planFilter').value.toLowerCase();
   const wks=schedPlan.length?schedPlan[0].weekAlloc.length:8;
-  document.getElementById('planHead').innerHTML=`<tr>
+  document.getElementById('planHead').innerHTML<`<tr>
     <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
     <th class="num">Score</th><th class="num">Target (kg)</th>
     ${Array.from({length:wks},(_,i)=>`<th class="num">W${i+1}</th>`).join('')}
@@ -737,12 +735,12 @@ function renderPlanTable(){
     return`<tr>
       <td style="color:#94a3b8">${i+1}</td>
       <td style="font-family:monospace;font-size:11px">${r.code}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'â'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'\u2014'}</td>
       <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
       <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
       <td class="num"><b>${r.score.toFixed(4)}</b></td>
       <td class="num">${r.toProdKg.toFixed(0)}</td>
-      ${r.weekAlloc.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'â'}</td>`).join('')}
+      ${r.weekAlloc.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'\u2014'}</td>`).join('')}
       <td class="num"><b>${tot.toFixed(0)}</b></td>
     </tr>`;
   }).join('');
@@ -755,7 +753,7 @@ function renderPlanTable(){
     <div class="card"><h4>Peak Week (kg)</h4><div class="val">${weekTots.length?Math.max(...weekTots).toFixed(0):'0'}</div></div>`;
 }
 
-// âââ Utilities ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Utilities ----------------------------------------------------------------
 function showTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
@@ -792,15 +790,15 @@ function downloadTemplate(){
   a.download='stock_upload_template.csv';a.click();
 }
 
-// âââ Formula panel toggle âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Formula panel toggle -----------------------------------------------------
 function toggleFormula() {
   const body = document.getElementById('formulaBody');
   const arrow = document.getElementById('formulaArrow');
   const open = body.classList.toggle('open');
-  arrow.textContent = open ? 'â¼' : 'â¶';
+  arrow.textContent = open ? '&#9660;' : '&#9654;';
 }
 
-// âââ MRP live sync (postMessage from portal relay) ââââââââââââââââââââââââââââ
+// --- MRP live sync (postMessage from portal relay) ----------------------------
 window.addEventListener('message', e => {
   if (!e.data || e.data.type !== 'MRP_STOCK_UPDATE') return;
   mrpData = {
@@ -814,11 +812,11 @@ window.addEventListener('message', e => {
   const badge = document.getElementById('mrpSyncBadge');
   if (badge) badge.classList.add('visible');
   document.getElementById('lastUpdated').textContent =
-    'ð MRP sync: ' + new Date().toLocaleTimeString();
+    ' MRP sync: ' + new Date().toLocaleTimeString();
   recompute();
 });
 
-// âââ Init âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Init ---------------------------------------------------------------------
 document.getElementById('cfgTargetDoc').addEventListener('change',recompute);
 rows=computeRows();
 renderSummaryCards();
