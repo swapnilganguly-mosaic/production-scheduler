@@ -447,7 +447,7 @@ async function loadGSheet() {
       const code=r['SKU Code']||r['SKU']||'';
       if(!code) return;
       let qty=n(r['Qty Per Unit']||r['qty_per_unit']||r['RM Qty (kg/unit)']||0);
-      if('qty){
+      if(!qty){
         const pct=n(r['RM % IN FG']||r['RM%']||0);
         const pkKg=n(r['Pack Size (g)']||r['Pack Size']||(skuMap[code]?.packSize||0))/1000;
         qty=pct*pkKg;
