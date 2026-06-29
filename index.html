@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Production Scheduler — Mosaic Wellness</title>
+<title>Production Scheduler â Mosaic Wellness</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;background:#f4f6fb;color:#1a1a2e}
@@ -55,6 +55,20 @@ tr:last-child td{border-bottom:none}
 .card .val{font-size:20px;font-weight:700;color:#1a1a2e}
 .card .sub{font-size:11px;color:#94a3b8}
 .sched-controls{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.formula-panel{background:#fff;border-bottom:1px solid #e2e8f0}
+.formula-toggle{padding:8px 20px;display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600;color:#475569;user-select:none}
+.formula-toggle:hover{background:#f8fafc}
+.formula-toggle .fa{font-size:10px;transition:.2s}
+.formula-body{padding:10px 20px 14px;display:none;background:#f8fafc;border-top:1px solid #e2e8f0}
+.formula-body.open{display:block}
+.formula-main{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;padding:8px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;display:inline-block}
+.formula-row{font-size:11.5px;color:#475569;margin:4px 0;padding-left:4px}
+.formula-row b{color:#1e293b}
+.formula-tbl{border-collapse:collapse;font-size:11px;margin-top:8px}
+.formula-tbl th{background:#1e293b;color:#e2e8f0;padding:4px 10px;text-align:center}
+.formula-tbl td{padding:3px 10px;border:1px solid #e2e8f0;text-align:center}
+.mrp-status{margin-left:auto;font-size:11px;padding:3px 8px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:600;display:none}
+.mrp-status.visible{display:inline-block}
 </style>
 </head>
 <body>
@@ -68,14 +82,15 @@ tr:last-child td{border-bottom:none}
 </header>
 
 <div id="statusBar">
-  <span class="status-dot" id="gsDot"></span><span id="statusText">Loading MRP data from Google Sheets…</span>
+  <span class="status-dot" id="gsDot"></span><span id="statusText">Loading MRP data from Google Sheetsâ¦</span>
+  <span class="mrp-status" id="mrpSyncBadge">ð MRP Live Sync</span>
   <span style="margin-left:auto;color:#94a3b8;font-size:11px" id="lastUpdated"></span>
 </div>
 
 <div class="import-bar">
   <label>Stock Upload (FG / RM / PM):</label>
   <input type="file" id="stockFile" accept=".xlsx,.csv" onchange="importStock(this)">
-  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code · FG Stock (units) · RM Stock (kg) · PM Stock (units)</span>
+  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code Â· FG Stock (units) Â· RM Stock (kg) Â· PM Stock (units)</span>
   <button class="btn secondary" onclick="downloadTemplate()">Download Template</button>
   <button class="btn green" onclick="loadGSheet()">&#8635; Refresh MRP Data</button>
 </div>
@@ -95,10 +110,31 @@ tr:last-child td{border-bottom:none}
   <button class="btn secondary" onclick="downloadCSV()">&#11015; Export CSV</button>
 </div>
 
+<!-- Formula Panel -->
+<div class="formula-panel">
+  <div class="formula-toggle" onclick="toggleFormula()">
+    ð Score Formula &nbsp;<span id="formulaArrow">â¶</span>
+  </div>
+  <div class="formula-body" id="formulaBody">
+    <div class="formula-main">Score = Urgency Ã Strategic Weight Ã RM Confidence</div>
+    <div class="formula-row"><b>Urgency</b> = 1 / FG DOC &nbsp;|&nbsp; <b>FG DOC</b> (days) = FG Stock (units) Ã· DRR (units/day)</div>
+    <div class="formula-row"><b>RM Confidence</b> = min(RM DOC, PM DOC) / Target RM DOC &nbsp;[capped at 1]</div>
+    <div class="formula-row"><b>RM DOC</b> = min over all RM materials of [ RM Stock (kg) Ã· (RM% Ã Pack Size kg Ã DRR) ] &nbsp;â bottleneck material</div>
+    <div class="formula-row"><b>PM DOC</b> = min over all PM materials of [ PM Stock (units) Ã· (PM Qty/unit Ã DRR) ] &nbsp;â bottleneck material</div>
+    <div class="formula-row" style="margin-top:6px"><b>DRR</b> = Jun Units/day (embedded) &nbsp;|&nbsp; <b>RM/PM Stock</b> = live sync from MRP Tool &nbsp;|&nbsp; <b>FG Stock</b> = manual upload</div>
+    <table class="formula-tbl" style="margin-top:10px">
+      <tr><th>Class \ Priority</th><th>P1</th><th>P2</th><th>P3</th></tr>
+      <tr><td><b>A</b></td><td>1.0</td><td>1.2</td><td>1.5</td></tr>
+      <tr><td><b>B</b></td><td>0.7</td><td>0.9</td><td>1.1</td></tr>
+      <tr><td><b>C</b></td><td>0.4</td><td>0.5</td><td>0.6</td></tr>
+    </table>
+  </div>
+</div>
+
 <!-- Priority Scoring Tab -->
 <div id="tab-priority" class="tab-content active">
   <div class="filter-bar">
-    <input type="text" id="scoreFilter" placeholder="Filter by SKU code or name…" oninput="renderScoreTable()">
+    <input type="text" id="scoreFilter" placeholder="Filter by SKU code or nameâ¦" oninput="renderScoreTable()">
   </div>
   <div class="summary-row" id="summaryCards"></div>
   <div class="tbl-wrap">
@@ -111,7 +147,7 @@ tr:last-child td{border-bottom:none}
         <th class="num">PM Stock</th><th class="num">PM Req (/30d)</th><th class="num">PM DOC</th>
         <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
       </tr></thead>
-      <tbody id="scoreBody"><tr><td colspan="18" class="empty"><h3>Loading…</h3></td></tr></tbody>
+      <tbody id="scoreBody"><tr><td colspan="18" class="empty"><h3>Loadingâ¦</h3></td></tr></tbody>
     </table>
   </div>
 </div>
@@ -119,7 +155,7 @@ tr:last-child td{border-bottom:none}
 <!-- Production Plan Tab -->
 <div id="tab-planning" class="tab-content">
   <div class="sched-controls">
-    <input type="text" id="planFilter" placeholder="Filter SKUs…" oninput="renderPlanTable()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:220px">
+    <input type="text" id="planFilter" placeholder="Filter SKUsâ¦" oninput="renderPlanTable()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:220px">
     <button class="btn" onclick="runSchedule()">Run Schedule</button>
     <span style="font-size:12px;color:#64748b" id="schedStatus"></span>
   </div>
@@ -133,7 +169,7 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <script>
-// ─── JAS Class Lookup (216 SKUs) ─────────────────────────────────────────────
+// âââ JAS Class Lookup (216 SKUs) âââââââââââââââââââââââââââââââââââââââââââââ
 const JAS_CLASS = {
   'MWMMHRP.0004.AAAA.B0_N':{c:'A',p:'P1',w:1.0},'MWLJNTP.0003.B0_N':{c:'A',p:'P1',w:1.0},
   'MWMMHRP.0008.AAAA.B0_R':{c:'A',p:'P1',w:1.0},'MWBWHFP.00575.B0_N':{c:'A',p:'P2',w:1.2},
@@ -245,15 +281,128 @@ const JAS_CLASS = {
   'MWMMSKP.5065.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMSKP.5066.AAAABO_N':{c:'C',p:'P3',w:0.6}
 };
 
+// âââ Embedded DRR â Jun Units/day (col H of DRR Excel) âââââââââââââââââââââââ
+const DRR_DATA = {
+  'MWBWSKP.00265.B0_N':233.6429,'MWBWSKP.00401.B0_N':138.3571,'MWBWSKP.00427.B0_N':181.8571,
+  'MWBWSKP.00428.B0_N':540.4286,'MWBWSKP.00436.B0_N':1180.6429,'MWBWSKP.00532.B0_N':40.2143,
+  'MWBWSKP.00630.B0_N':10.5714,'MWBWSKP.00676.B0_N':81.0714,'MWBWSKP.00697.B0_N':200.5714,
+  'MWBWSKP.00651.B0_N':153.2143,'MWBWSKP.00240.B0_N':215.7857,'MWBWSKP.00241.B0_N':448.0714,
+  'MWBWHFP.00626.B0_N':48.4286,'MWBWSKP.00328.B0_N':847.7857,'MWBWBCP.00166.B0_N':2814.7857,
+  'MWBWBCP.00167.B0_N':855.5714,'MWBWBCP.00168.B0_N':103.5,'MWBWHFP.00625.B0_N':747.1429,
+  'MWBWSKP.00214.B0_N':702.0714,'MWBWSKP.00626.B0_N':1233.2857,'MWBWSKP.00703.B0_N':2596.2143,
+  'MWBWSKK.00801.B0_N':174.2857,'MWBWBCP.00170.B0_N':32.5,'MWBWSKP.00418.B0_N':4921.5,
+  'MWBWSKP.00525.B0_N':601.5714,'MWBWSKP.00526.B0_N':1031.9286,'MWBWSKP.00589.B0_N':1167.3571,
+  'MWBWSKP.00646.B0_N':169.7857,'MWBWSKP.00680.B0_N':245.7143,'MWBWSKP.00681.B0_N':1209.9286,
+  'MWBWSKP.00684.B0_N':2354.0,'MWBWSKP.00787.B0_N':454.4286,'MWBWSKP.00788.B0_N':477.0,
+  'MWBWSKP.00614.B0_N':1582.0,'MWBWSKP.00687.B0_N':410.5714,'MWBWSKP.00777.B0_N':415.2143,
+  'MWBWSKP.00648.B0_N':330.7143,'MWBWSKP.00659.B0_N':192.2857,'MWBWSKP.00797.B0_N':128.9286,
+  'MWBWSKK.00201.B0_N':61.7143,'MWBWSKP.0001.B0_N':58.6429,'MWBWSKP.00169.B0_N':187.8571,
+  'MWBWSKP.00613.B7_N':0.0714,'MWBWSKP.0003.B0_N':10.2143,'MWBWSKP.00505.B0_N':0.0,
+  'MWBWSKP.00533.B0_N':34.0,'MWBWSKP.00206.B0_N':277.4286,'MWBWSKP.00537.B0_N':0.0,
+  'MWBWSKP.00647.B0_N':0.0714,'MWBWHFP.00172.B0_N':76.7143,'MWBWHFP.00538.B0_N':20.1429,
+  'MWBWHFP.00707.B0_N':29.6429,'MWBWHFP.00161.B0_N':51.7857,'MWBWHFP.0018.B0_N':152.2857,
+  'MWBWHFP.0019.B0_N':88.8571,'MWBWHFP.0020.B0_N':43.2857,'MWBWHFP.00225.B0_N':18.2857,
+  'MWBWHFP.00574.B0_N':18.8571,'MWBWHFP.00609.B0_N':4.2143,'MWBWHFP.00644.B0_N':34.5,
+  'MWBWSKP.00587.B0_N':103.7143,'MWBWHFP.00204.B0_N':316.3571,'MWBWHFP.00310.B0_N':101.9286,'MWBWHFP.00541.B0_N':101.9286,'MWBWHFP.00575.B0_N':3086.4286,'MWBWHFP.00635.B0_N':37.3571,
+  'MWBWHFP.00637.B0_N':559.3571,'MWBWHFP.00672.B0_N':642.9286,'MWBWHFP.00145.B0_N':639.0714,
+  'MWBWHFP.00531.B0_N':2905.4286,'MWBWHFP.00711.B0_N':405.9286,'MWBWNTP.00345.B0_N':125.3571,
+  'MWBWICP.00334.B0_N':6.0714,'MWBWNTP.00168.B0_N':94.9286,'MWBWNTP.00347.B0_N':32.3571,
+  'MWBWNTP.00348.B0_N':72.5714,'MWBWPRP.00004.B0_N':10.5714,'MWBWSKP.00132.B0_N':101.7857,
+  'MWBWNTP.00341.B0_N':194.7143,'MWBWNTP.00356.B0_N':340.5,'MWBWNTP.00357.B0_N':91.5714,
+  'MWBWSKP.00650.B0_N':122.0,'MWBWSKP.00652.B0_N':29.0714,'MWBWSKP.00226.B0_N':0.2857,
+  'MWBWSKP.00771.B0_N':40.1429,'MWBWSKP.00584.B0_N':142.5714,'MWBWSKP.00672.B0_N':153.2143,
+  'MWBWHFP.0021.B0_N':233.7857,'MWBWSKP.00586.B0_N':189.2857,'MWBWSKP.00649.B0_N':0.2143,
+  'MWBWSKP.0002.B0_N':7.7143,'MWBWSKP.00437.B0_N':63.0714,'MWBWSKP.00504.B0_N':5.6429,
+  'MWBWHFP.00229.B0_N':77.5714,'MWBWHFP.0081.B0_N':267.0,'MWBWHFP.00188.BO_N':29.8571,
+  'MWBWSKP.00677.B0_N':15.0714,'MWBWSKS.0045.B0_N':375.7143,'MWBWHFP.00167.B0_N':2.5,
+  'MWBWNTP.00349.B0_N':0.0,'MWBWNTP.00339.B_N':0.3571,'MWBWSKS.0062.B0_N':32.3571,
+  'MWBWSKP.00585.B0_N':0.0,'MWBWSKP.00653.B0_N':2.3571,'MWBBSKP.00807.BO_N':7.9286,
+  'MWBBSKP.00808.BO_N':8.7143,'MWBBSKP.00812.BO_N':35.7143,'MWBWBCP.00188.BO_N':21.7857,
+  'MWBWHFP.00689.B0_N':0.5,'MWBWSKK.0057.B0_N':0.2857,'MWBWSKP.00660.B0_N':0.0,
+  'MWBWSKP.00661.B0_N':0.0,'MWBWSKS.0049.B0_N':4.1429,'MWBWSKS.0050.B0_N':2.0,
+  'MWBWSKS.0051.B0_N':0.0,'MWBWSKS.0054.B0_N':5.5,'MWBWHFFS.0040.B0_N':3.5714,
+  'MWBWHFFS.0041.B0_N':0.0,'MWBWHFFS.0039.B0_N':0.0714,'MWBWSKP.00690.B0_N':1.1429,
+  'MWBWSKS.0065.B0_N':0.0714,'MWMMBDP.0128.AAAA.B0_R':28.5,'MWMMBDP.0132.AAAA.B0_R':443.2857,
+  'MWMMBDP.0006.AAAA.B0_N':901.6429,'MWMMHRP.0012.AAAA.B0_N':98.5,'MWMMHRP.0010.AAAA.B0_R':77.1429,
+  'MWMMHRP.0017.AAAA.B0_N':115.1429,'MWMMHRP.1001.AAAA.B0_N':180.2143,'MWMMHRP.6198.AAAA.B0_N':56.5714,
+  'MWMMHRP.7121.B0_R':278.0714,'MWMMHRP.2050.AAAA.B0_N':1509.4286,'MWMMHRP.6286.AAAA.B0_N':522.7857,
+  'MWMMHRP.7030.B0_N':127.4286,'MWMMHRP.0001.AAAA.B0_N':374.4286,'MWMMHRP.0002.AAAA.B0_N':67.3571,
+  'MWMMHRP.0003.AAAA.B0_N':11.1429,'MWMMHRP.0014.AAAA.B0_N':195.9286,'MWMMHRP.0015.AAAA.B0_N':2.6429,
+  'MWMMHRP.0018.AAAA.B0_N':33.9286,'MWMMHRP.1003.AAAA.B0_N':0.0,'MWMMHRP.7031.B0_N':742.4286,
+  'MWMMHRP.6298.AAAA.B0_N':356.1429,'MWMMHRP.6663.B0_N':55.2857,'MWMMHRP.0004.AAAA.B0_N':3393.5714,
+  'MWMMHRP.0010.AAAA.B0_N':262.3571,'MWMMHRP.6190.AAAA.B0_N':273.1429,'MWMMNTK.0129.AAAA.B0_N':1.2857,
+  'MWMMNTP.00205.AAAA.B0_N':22.9286,'MWMMNTP.00207.AAAA.B0_N':179.7857,'MWMMNTP.0035.AAAABO_N':30.1429,
+  'MWMMNTP.6348.AAAABO_N':2.5,'MWMMNTP.000191.AAAAB0_N':0.1429,'MWMMNTP.00208.AAAA.B0_N':127.2143,
+  'MWMMNTP.0169.AAAA.B0_N':2.0714,'MWMMSKP.5061.AAAA.B0_N':5.3571,'MWMMNTP.0003.AAAA.B0_N':10.7857,
+  'MWMMNTP.0073.AAAA.B0_N':77.0714,'MWMMNTP.0105.AAAA.B0_N':7.9286,'MWMMNTP.0002.AAAA.B0_N':24.5714,
+  'MWMMNTK.0141.AAAA.B0_N':46.0714,'MWMMNTP.6369.AAAABO_N':59.0714,'MWMMHTP.0001.AAAA.B0_N':75.7143,
+  'MWMMHTP.0005.AAAA.B0_N':450.5714,'MWMMHTP.0007.AAAA.B0_N':0.2857,'MWMMHTP.0127.AAAA.B0_N':46.8571,
+  'MWMMPRK.2026.AAAA.B0_N':65.5714,'MWMMPRP.0009.AAAA.B0_N':72.6429,'MWMMSKP.5002.AAAA.B0_N':114.1429,
+  'MWMMSKP.5003.AAAA.B0_N':42.2857,'MWMMSKP.5012.AAAA.B0_N':68.3571,'MWMMSKP.5049.AAAA.B0_N':17.1429,
+  'MWMMSKP.5059.AAAA.B0_N':1.5714,'MWMMNTP.0171.AAAA.B0_N':383.5714,'MWMMNTP.6345.AAAABO_N':34.1429,
+  'MWMMPRK.2097.B0_N':539.7143,'MWMMPRP.2092.B0_N':497.8571,'MWMMHRP.0009.AAAA.B0_R':142.6429,
+  'MWMMBDK.0280.AAAA.B0_N':148.0,'MWMMHRP.0019.AAAA.B0_N':0.0714,'MWMMHRP.0006.AAAA.B0_R':1445.7143,
+  'MWMMHRP.0008.AAAA.B0_R':2218.0,'MWMMNTS.0034.AAAA.B0_N':2.2857,'MWMMSKP.5006.AAAA.B0_N':0.0,
+  'MWMMPRP.2032.AAAA.B0_N':18.3571,'MWMMBDP.0001.AAAA.B0_N':899.7857,'MWMMHRP.0007.AAAA.B0_R':0.6429,
+  'MWMMHRP.6337.AAAA.B0_N':976.9286,'MWMMHRP.6622.B0_R':600.2857,'MWMMHRP.7106.B0_R':2.5714,
+  'MWMMHKC.00002.AAAA.B0_N':2.1429,'MWMMHRK.6357.AAAABO_N':368.3571,'MWMMBDP.0005.AAAA.B0_N':358.5714,
+  'MWMMHRP.7044.B0_N':16.4286,'MWMMHRP.0009.AAAA.B0_N':0.4286,'MWMMHRS.0018.AAAA.B0_N':4.8571,
+  'MWMMNTP.6356.AAAABO_N':0.0,'MWMMSKP.5063.AAAA.B0_N':9.0714,'MWMMNTP.000186.AAAAB0_N':0.0,
+  'MWMMNTP.00210.AAAA.B0_N':4.5714,'MWMMNTP.00211.AAAA.B0_N':3.7857,'MWMMHTS.1003.AAAA.B0_N':2.2143,
+  'MWMMNTP.0148.AAAA.B0_N':9.2857,'MWMMNTS.0032.AAAA.B0_N':0.0,'MWMMPRP.2022.AAAA.B0_N':2.1429,
+  'MWLJNTP.00019.B0_N':1453.1429,'MWLJNTP.000813.B0_N':72.2857,'MWLJNTP.00535.B0_N':72.4286,
+  'MWLJNTP.00561.B0_N':0.2143,'MWLJNTP.00536.B0_N':616.8571,'MWLJNTK.00366.B0_N':949.9286,
+  'MWLJNTP.000759.B0_N':56.2857,'MWLJNTP.00381.B0_N':0.0,'MWLJNTP.00481.B0_N':343.2143,
+  'MWLJNTP.00560.B0_N':0.0,'MWLJNTP.000755.B0_N':510.2857,'MWLJNTP.000814.B0_N':122.5,
+  'MWLJNTP.00548.B0_N':0.8571,'MWLJNTP.00571.B0_N':165.3571,'MWLJNTP.00018.B0_N':0.0,
+  'MWLJNTP.000748.B0_N':295.8571,'MWLJNTP.000795.B0_N':142.0714,'MWLJNTP.00572.B0_N':1371.8571,
+  'MWLJNTP.0007.B0_N':872.4286,'MWLJNTP.00532.B0_N':80.7857,'MWLJNTP.00248.B0_N':517.5,
+  'MWLJNTP.00241.B0_N':133.4286,'MWLJNTP.00380.B0_N':353.4286,'MWLJNTP.00060.B0_N':11.3571,
+  'MWLJNTP.000801.B0_N':281.2857,'MWLJNTP.00542.BO_N':132.2857,'MWLJNTP.0002.B0_N':2302.0,
+  'MWLJNTP.00023.B0_N':146.5714,'MWLJNTP.00056.B0_N':123.4286,'MWLJNTP.00051.B0_N':1102.1429,
+  'MWLJNTP.00126.B0_N':333.1429,'MWLJNTP.00017.B0_N':7.5,'MWLJNTP.00027.B0_N':464.5714,
+  'MWLJNTP.0003.B0_N':3086.4286,'MWLJNTP.00033.B0_N':267.5714,'MWLJNTP.00034.B0_N':340.2857,
+  'MWLJNTP.00043.B0_N':38.7143,'MWLJNTP.00122.B0_N':392.8571,'MWLJNTP.00482.B0_N':18.3571,
+  'MWLJNTP.00483.B0_N':247.5,'MWLJNTP.00507.B0_N':377.5714,'MWLJNTP.00519.B0_N':0.1429,
+  'MWLJNTP.00667.B0_N':17.5,'MWLJNTP.00668.B0_N':45.0714,'MWLJNTP.00059.B0_N':1655.1429,
+  'MWLJNTP.00169.B0_N':179.7857,'MWLJNTP.00177.B0_N':162.0,'MWLJNTP.00423.B0_N':68.6429,
+  'MWLJNTP.00500.B0_N':282.0714,'MWLJNTP.00528.B0_N':0.1429,'MWLJNTP.00529.B0_N':45.0,
+  'MWLJNTP.00530.B0_N':12.7143,'MWLJNTP.00531.B0_N':0.0714,'MWLJNTP.00636.B0_N':186.0714,
+  'MWLJNTP.00520.B0_N':92.7143,'MWLJNTP.00518.B0_N':131.7143,'MWLJNTP.00607.BO_N':76.5714,
+  'MWLJNTP.00480.B0_N':839.5714,'MWLJNTP.00339.B0_N':240.6429,'MWLJNTP.00584.BO_N':52.3571,
+  'MWLJGNP.00022.B0_N':6.9286,'MWLJNTP.00636.BO_N':29.6429,'MWLJDCP.0001.B0_N':259.0714,
+  'MWLJDCP.00011.B0_N':103.6429,'MWLJHYP.0001.B0_N':5.8571,'MWLJSKP.0002.B0_N':22.8571,
+  'MWLJSKP.0003.B0_N':123.2857,'MWLJSKP.0007.B0_N':10.9286,'MWLJNTP.00553.BO_N':241.8571,
+  'MWLJNTS.00064.B0_N':43.6429,'MWLJNTP.00501.B0_N':0.0,'MWLJNTP.000810.B0_N':178.9286,
+  'MWLJNTP.00617.BO_N':49.9286,'MWLJNTP.00618.BO_N':61.5,'MWLJNTP.000809.B0_N':41.6429,
+  'MWLJNTP.00533.B0_N':62.6429,'MWLJNTP.00534.B0_N':75.0,'MWLJNTK.00367.B0_N':846.5,
+  'MWLJNTP.000709.B0_N':134.0,'MWLJNTP.000836.B0_N':153.0714,'MWLJNTP.00484.B0_N':0.0,
+  'MWLJNTP.00485.B0_N':0.0,'MWLJNTP.00608.BO_N':5.8571,'MWLJNTP.00609.BO_N':31.4286,
+  'MWLJNTP.00610.BO_N':30.3571,'MWLJNTP.00698.B0_N':260.1429,'MWLJNTP.000796.B0_N':462.0714,
+  'MWLJNTP.00527.BO_N':10.7857,'MWLJHYP.0006.B0_N':48.6429,'MWLJNTP.00124.B0_N':0.0,
+  'MWLJNTS.0006.BO_N':31.5,'MWLJNTS.0001.B0_N':336.2857,'MWLJNTS.0002.B0_N':73.6429,
+  'MWLJNTP.00551.BO_N':160.1429,'MWLJNTP.00699.B0_N':22.1429,'MWLJNTP.00615.BO_N':88.8571,
+  'MWLJNTP.00616.BO_N':52.7143,'MWLJNTP.000820.B0_N':117.1429,'MWLJNTP.00562.B0_N':0.0,
+  'MWLJNTP.00563.B0_N':527.9286,'MWLJNTP.00574.BO_N':0.5714,'MWLJNTP.00591.B0_N':55.3571,
+  'MWLJNTP.00592.B0_N':531.4286,'MWLJNTP.00678.B0_N':0.6429,'MWLJNTS.00043.B0_N':110.0714,
+  'MWLJNTS.0008.B0_N':9.9286,'MWLJNTP.00406.B0_N':0.0,'MWLJNTP.00586.BO_N':0.0714,
+  'MWLJNTS.0003.B0_N':4.1429,'MWLJNTS.00040.B0_N':1.0,'MWLJNTP.00541.BO_N':12.5,
+  'MWLJNTP.00664.BO_N':35.3571,'MWLJNTP.00700.B0_N':36.2857,'MWBWNTP.00356.B0_N':0.0,
+  'MWBWNTP.00357.B0_N':0.0,'MWLJNTP.00605.BO_N':117.0714,'MWLJGNP.00021.B0_N':0.0,
+  'MWLJGNP.00051.B0_N':0.2143,'MWLJGNP.00059.B0_N':2.4286,'MWLJSKP.0034.B0_N':0.0,
+  'MWLJDCS.0001.B0_N':229.9286,'MWLJNTS.00021.B0_N':0.2143,'MWLJNTS.00022.B0_N':1.1429
+};
+
 const MRP_SHEET_ID = '1PDvEjSHOqrn902Y6vIpRvVwlkw3B5HpwP4w6_Stl58o';
 const GS_TABS = { skuMaster:'SKU Master', rmBom:'RM BOM', pmBom:'PM BOM', drr:'DRR' };
 
 let gsData    = null;
+let mrpData   = null;   // live from MRP Tool via postMessage
 let stockData = {};
 let rows      = [];
 let schedPlan = [];
 
-// ─── GSheet fetch ────────────────────────────────────────────────────────────
+// âââ GSheet fetch ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 async function gvizFetch(tab) {
   const url = `https://docs.google.com/spreadsheets/d/${MRP_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
   const r = await fetch(url);
@@ -283,7 +432,7 @@ function parseRow(line) {
 function n(v){const x=parseFloat(v);return isNaN(x)?0:x;}
 
 async function loadGSheet() {
-  setStatus('Loading MRP data…','warn');
+  setStatus('Loading MRP dataâ¦','warn');
   try {
     const [skuCsv,rmCsv,pmCsv,drrCsv] = await Promise.all([
       gvizFetch(GS_TABS.skuMaster), gvizFetch(GS_TABS.rmBom),
@@ -308,7 +457,6 @@ async function loadGSheet() {
       if(code) drrMap[code]=drr;
     });
 
-    // RM BOM: sum all RM kg-per-unit for each SKU
     const rmBomMap={};
     rmRows.forEach(r=>{
       const code=r['SKU Code']||r['SKU']||'';
@@ -322,7 +470,6 @@ async function loadGSheet() {
       rmBomMap[code]=(rmBomMap[code]||0)+qty;
     });
 
-    // PM BOM: sum all PM units-per-unit for each SKU
     const pmBomMap={};
     pmRows.forEach(r=>{
       const code=r['SKU Code']||r['SKU']||'';
@@ -332,7 +479,7 @@ async function loadGSheet() {
     });
 
     gsData={skuMap,drrMap,rmBomMap,pmBomMap};
-    setStatus(`MRP data loaded — ${Object.keys(skuMap).length} SKUs`,'ok');
+    setStatus(`MRP data loaded â ${Object.keys(skuMap).length} SKUs`,'ok');
     document.getElementById('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
     recompute();
   } catch(e) {
@@ -341,7 +488,7 @@ async function loadGSheet() {
   }
 }
 
-// ─── Stock upload ─────────────────────────────────────────────────────────────
+// âââ Stock upload âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function importStock(input) {
   const file=input.files[0]; if(!file) return;
   const ext=file.name.split('.').pop().toLowerCase();
@@ -371,49 +518,101 @@ function processStockCsv(text) {
       pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
     };
   });
-  setStatus(`Stock loaded — ${Object.keys(stockData).length} SKUs`,'ok');
+  setStatus(`Stock loaded â ${Object.keys(stockData).length} SKUs`,'ok');
   recompute();
 }
 
-// ─── Core scoring ─────────────────────────────────────────────────────────────
+// âââ Core scoring âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function computeRows() {
-  const targetDoc=n(document.getElementById('cfgTargetDoc').value)||60;
-  const codes=new Set([...Object.keys(JAS_CLASS),...Object.keys(stockData),...(gsData?Object.keys(gsData.drrMap):[])]);
-  const result=[];
-  codes.forEach(code=>{
-    const jas=JAS_CLASS[code]; if(!jas) return;
-    const sku=gsData?.skuMap[code]||{};
-    const drr=gsData?.drrMap[code]||0;
-    const rmReqPerUnit=gsData?.rmBomMap[code]||0;
-    const pmReqPerUnit=gsData?.pmBomMap[code]||0;
-    const stk=stockData[code]||{};
-    const fgStock=stk.fgStock??0, rmStock=stk.rmStock??0, pmStock=stk.pmStock??0;
+  const targetDoc = n(document.getElementById('cfgTargetDoc').value) || 60;
+  const codes = new Set([
+    ...Object.keys(JAS_CLASS), ...Object.keys(stockData),
+    ...Object.keys(DRR_DATA),  ...(gsData ? Object.keys(gsData.drrMap) : [])
+  ]);
+  const result = [];
+  codes.forEach(code => {
+    const jas = JAS_CLASS[code]; if (!jas) return;
 
-    const rmReq30=rmReqPerUnit*drr*30;
-    const pmReq30=pmReqPerUnit*drr*30;
-    const fgDoc=drr>0?fgStock/drr:null;
-    const rmDoc=rmReq30>0?rmStock/(rmReq30/30):null;
-    const pmDoc=pmReq30>0?pmStock/(pmReq30/30):null;
+    // DRR: embedded data first, fallback to GSheet
+    const drr = (DRR_DATA[code] != null ? DRR_DATA[code] : null) ?? (gsData?.drrMap[code] ?? 0);
 
-    // Score components
-    const urgency=(fgDoc!=null&&fgDoc>0)?1/fgDoc:0;
-    const stratWt=jas.w;
-    const docVals=[rmDoc,pmDoc].filter(d=>d!==null);
-    const minDoc=docVals.length>0?Math.min(...docVals):null;
-    const rmConf=minDoc!==null?Math.min(1,minDoc/targetDoc):0;
-    const score=urgency*stratWt*rmConf;
+    // SKU name: live MRP first, then GSheet, then code
+    const name = mrpData?.skuNames[code] || gsData?.skuMap[code]?.name || '';
 
-    result.push({code,name:sku.name||'',cls:jas.c,priority:jas.p,
-      fgStock,drr,fgDoc,urgency,stratWt,
-      rmStock,rmReq30,rmDoc,pmStock,pmReq30,pmDoc,rmConf,score});
+    // Pack size: live MRP first, then GSheet
+    const packSizeG  = mrpData?.packSizes[code] || gsData?.skuMap[code]?.packSize || 0;
+    const packSizeKg = packSizeG / 1000;
+
+    // FG stock from manual upload
+    const stk = stockData[code] || {};
+    const fgStock = stk.fgStock ?? 0;
+    const fgDoc   = drr > 0 ? fgStock / drr : null;
+
+    // ââ RM DOC: per-material bottleneck using live MRP stock ââ
+    let rmDoc = null, rmStockDisplay = 0, rmReq30Display = 0;
+    const rmBomList = mrpData?.rmBom[code];
+    if (rmBomList && rmBomList.length > 0 && drr > 0 && packSizeKg > 0) {
+      const matDocs = [];
+      rmBomList.forEach(({key, pct}) => {
+        const matStock  = mrpData.rmStock[key] ?? 0;
+        const reqPerDay = pct * packSizeKg * drr;
+        rmStockDisplay += matStock;
+        rmReq30Display += reqPerDay * 30;
+        if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
+      });
+      if (matDocs.length) rmDoc = Math.min(...matDocs);
+    } else {
+      const rmStockUp    = stk.rmStock ?? 0;
+      const rmReqPerUnit = gsData?.rmBomMap[code] || 0;
+      rmReq30Display = rmReqPerUnit * drr * 30;
+      rmStockDisplay = rmStockUp;
+      if (rmReq30Display > 0) rmDoc = rmStockUp / (rmReq30Display / 30);
+    }
+
+    // ââ PM DOC: per-material bottleneck using live MRP stock ââ
+    let pmDoc = null, pmStockDisplay = 0, pmReq30Display = 0;
+    const pmBomList = mrpData?.pmBom[code];
+    if (pmBomList && pmBomList.length > 0 && drr > 0) {
+      const matDocs = [];
+      pmBomList.forEach(({key, qty}) => {
+        const matStock  = mrpData.pmStock[key] ?? 0;
+        const reqPerDay = qty * drr;
+        pmStockDisplay += matStock;
+        pmReq30Display += reqPerDay * 30;
+        if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
+      });
+      if (matDocs.length) pmDoc = Math.min(...matDocs);
+    } else {
+      const pmStockUp    = stk.pmStock ?? 0;
+      const pmReqPerUnit = gsData?.pmBomMap[code] || 0;
+      pmReq30Display = pmReqPerUnit * drr * 30;
+      pmStockDisplay = pmStockUp;
+      if (pmReq30Display > 0) pmDoc = pmStockUp / (pmReq30Display / 30);
+    }
+
+    // Score = Urgency Ã Strategic Weight Ã RM Confidence
+    const urgency = (fgDoc != null && fgDoc > 0) ? 1 / fgDoc : 0;
+    const stratWt = jas.w;
+    const docVals = [rmDoc, pmDoc].filter(d => d !== null);
+    const minDoc  = docVals.length > 0 ? Math.min(...docVals) : null;
+    const rmConf  = minDoc !== null ? Math.min(1, minDoc / targetDoc) : 0;
+    const score   = urgency * stratWt * rmConf;
+
+    result.push({
+      code, name, cls: jas.c, priority: jas.p, packSizeKg,
+      fgStock, drr, fgDoc, urgency, stratWt,
+      rmStock: rmStockDisplay, rmReq30: rmReq30Display, rmDoc,
+      pmStock: pmStockDisplay, pmReq30: pmReq30Display, pmDoc,
+      rmConf, score
+    });
   });
-  result.sort((a,b)=>b.score-a.score);
+  result.sort((a, b) => b.score - a.score);
   return result;
 }
 
 function recompute(){rows=computeRows();renderScoreTable();renderSummaryCards();}
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+// âââ Render âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function renderScoreTable() {
   const filter=document.getElementById('scoreFilter').value.toLowerCase();
   const clsF=document.getElementById('cfgClass').value;
@@ -427,8 +626,8 @@ function renderScoreTable() {
     return true;
   });
 
-  const fmt=(v,d=1)=>v==null?'—':(+v).toFixed(d);
-  const fmtI=v=>v==null?'—':Math.round(v).toLocaleString();
+  const fmt=(v,d=1)=>v==null?'â':(+v).toFixed(d);
+  const fmtI=v=>v==null?'â':Math.round(v).toLocaleString();
 
   const tbody=document.getElementById('scoreBody');
   if(!filtered.length){
@@ -438,7 +637,7 @@ function renderScoreTable() {
     <tr>
       <td style="color:#94a3b8">${i+1}</td>
       <td style="font-family:monospace;font-size:11px">${r.code}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">—</span>'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">â</span>'}</td>
       <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
       <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
       <td class="num">${fmtI(r.fgStock)}</td>
@@ -489,7 +688,7 @@ function renderSummaryCards(){
     <div class="card"><h4>Avg RM Confidence</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
 }
 
-// ─── Production plan ──────────────────────────────────────────────────────────
+// âââ Production plan ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function runSchedule(){
   const wks=parseInt(document.getElementById('cfgHorizon').value)||8;
   const capKg=n(document.getElementById('cfgLineCap').value)||5000;
@@ -498,7 +697,7 @@ function runSchedule(){
   const plan=rows.filter(r=>r.drr>0||r.fgStock>0).map(r=>{
     const tgStock=r.drr*tgDoc;
     const toProdUnits=Math.max(0,tgStock-r.fgStock);
-    const pkKg=(gsData?.skuMap[r.code]?.packSize||0)/1000;
+    const pkKg=r.packSizeKg||(gsData?.skuMap[r.code]?.packSize||0)/1000;
     const toProdKg=toProdUnits*(pkKg||0.001);
     return{...r,toProdUnits,toProdKg,weekAlloc:new Array(wks).fill(0)};
   });
@@ -538,12 +737,12 @@ function renderPlanTable(){
     return`<tr>
       <td style="color:#94a3b8">${i+1}</td>
       <td style="font-family:monospace;font-size:11px">${r.code}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'â'}</td>
       <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
       <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
       <td class="num"><b>${r.score.toFixed(4)}</b></td>
       <td class="num">${r.toProdKg.toFixed(0)}</td>
-      ${r.weekAlloc.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'—'}</td>`).join('')}
+      ${r.weekAlloc.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'â'}</td>`).join('')}
       <td class="num"><b>${tot.toFixed(0)}</b></td>
     </tr>`;
   }).join('');
@@ -556,7 +755,7 @@ function renderPlanTable(){
     <div class="card"><h4>Peak Week (kg)</h4><div class="val">${weekTots.length?Math.max(...weekTots).toFixed(0):'0'}</div></div>`;
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// âââ Utilities ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function showTab(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
@@ -593,7 +792,33 @@ function downloadTemplate(){
   a.download='stock_upload_template.csv';a.click();
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// âââ Formula panel toggle âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function toggleFormula() {
+  const body = document.getElementById('formulaBody');
+  const arrow = document.getElementById('formulaArrow');
+  const open = body.classList.toggle('open');
+  arrow.textContent = open ? 'â¼' : 'â¶';
+}
+
+// âââ MRP live sync (postMessage from portal relay) ââââââââââââââââââââââââââââ
+window.addEventListener('message', e => {
+  if (!e.data || e.data.type !== 'MRP_STOCK_UPDATE') return;
+  mrpData = {
+    skuNames: e.data.skuNames || {},
+    packSizes: e.data.packSizes || {},
+    rmStock:  e.data.rmStock  || {},
+    pmStock:  e.data.pmStock  || {},
+    rmBom:    e.data.rmBom    || {},
+    pmBom:    e.data.pmBom    || {}
+  };
+  const badge = document.getElementById('mrpSyncBadge');
+  if (badge) badge.classList.add('visible');
+  document.getElementById('lastUpdated').textContent =
+    'ð MRP sync: ' + new Date().toLocaleTimeString();
+  recompute();
+});
+
+// âââ Init âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 document.getElementById('cfgTargetDoc').addEventListener('change',recompute);
 rows=computeRows();
 renderSummaryCards();
