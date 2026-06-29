@@ -1,1172 +1,604 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Production Scheduler</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Production Scheduler — Mosaic Wellness</title>
 <style>
-  :root{
-    --bg:#f4f6fb; --panel:#ffffff; --panel2:#eef2f8; --line:#d7deea;
-    --ink:#1b2536; --muted:#5d6b82; --accent:#2f6fed; --accent2:#1f9d6b;
-    --warn:#c67f10; --bad:#d33b4a; --good:#1f9d6b;
-    --p0:#d33b4a; --p1:#c67f10; --p2:#2f6fed; --p3:#6b788f;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,Segoe UI,Roboto,Arial}
-  header{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
-  header h1{font-size:18px;margin:0;font-weight:650}
-  header .sub{color:var(--muted);font-size:12.5px;display:block;margin-top:3px}
-  .cm-pick{display:flex;flex-direction:column;gap:5px}
-  .cm-pick label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-  .cm-pick select{background:var(--panel2);border:1px solid var(--accent);color:var(--ink);border-radius:8px;padding:9px 12px;font:inherit;font-weight:650;min-width:200px}
-  /* sheet sync bar */
-  .sync-bar{display:flex;gap:8px;align-items:center;padding:8px 22px;background:var(--panel2);border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap}
-  .sync-bar .sync-status{color:var(--muted);min-width:220px}
-  .sync-bar .sync-status.ok{color:var(--good)} .sync-bar .sync-status.err{color:var(--bad)}
-  /* tab bar */
-  .tabs{display:flex;gap:2px;padding:0 22px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-  .tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:13px 20px;font:inherit;font-weight:650;border-radius:0;cursor:pointer}
-  .tabs button .t-sub{display:block;font-size:11px;font-weight:400;margin-top:2px;color:var(--muted)}
-  .tabs button.active{color:var(--ink);border-bottom-color:var(--accent)}
-  .tabs button:hover{color:var(--ink)}
-  main{padding:18px 22px;max-width:1600px;margin:0 auto}
-  .tabpanel{display:none}
-  .tabpanel.active{display:block}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
-  h2{font-size:14px;margin:0 0 12px;font-weight:650;letter-spacing:.02em}
-  h2 .hint{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
-  .controls{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
-  .ctl{display:flex;flex-direction:column;gap:5px}
-  .ctl label{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-  .dfl{font-size:9.5px;background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;text-transform:none;letter-spacing:0;vertical-align:middle}
-  input[type=number],input[type=text],select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 9px;font:inherit;min-width:120px}
-  input[type=number]{width:120px}
-  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:650;cursor:pointer}
-  button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line);font-weight:500}
-  button.save-btn{background:var(--accent2)}
-  button:hover{filter:brightness(1.08)}
-  button:disabled{opacity:.55;cursor:not-allowed;filter:none}
-  .scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
-  table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
-  th,td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:right}
-  th:first-child,td:first-child,th.l,td.l{text-align:left}
-  thead th{position:sticky;top:0;background:var(--panel2);z-index:1;font-weight:600;color:var(--muted)}
-  tbody tr:hover{background:#eef3fb}
-  .inp-table td{padding:4px 6px}
-  .inp-table input,.inp-table select{min-width:0;width:100%;padding:5px 6px}
-  .inp-table input{width:96px;text-align:right}
-  .inp-table select{width:62px;text-align:left}
-  .inp-table input.calc{background:#eaf4ee;color:var(--accent2);font-weight:650;cursor:not-allowed}
-  .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
-  .pill{display:inline-block;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:650}
-  .P0{background:rgba(227,93,106,.18);color:var(--p0)} .P1{background:rgba(230,162,60,.18);color:var(--p1)}
-  .P2{background:rgba(91,157,255,.18);color:var(--p2)} .P3{background:rgba(123,138,166,.18);color:var(--p3)}
-  .muted{color:var(--muted)}
-  .num{font-variant-numeric:tabular-nums}
-  .bar{position:relative;height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;min-width:46px}
-  .bar > i{position:absolute;left:0;top:0;bottom:0;background:var(--accent2);border-radius:4px}
-  .bar.over > i{background:var(--bad)}
-  td.day{font-variant-numeric:tabular-nums}
-  td.day.z{color:#b7c0d0}
-  .warns{display:flex;flex-direction:column;gap:6px}
-  .warn-item{display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:6px 10px;border-radius:8px;background:var(--panel2)}
-  .tag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:5px}
-  .tag.shortfall,.tag.capacity_exceeded{background:rgba(227,93,106,.2);color:var(--bad)}
-  .tag.zero_target,.tag.missing_inputs,.tag.unknown_sku{background:rgba(230,162,60,.2);color:var(--warn)}
-  .kpis{display:flex;gap:22px;flex-wrap:wrap}
-  .kpi{display:flex;flex-direction:column}
-  .kpi b{font-size:20px;font-weight:680} .kpi span{font-size:11.5px;color:var(--muted)}
-  .totcol{border-left:1px solid var(--line);font-weight:650}
-  .footnote{color:var(--muted);font-size:11.5px;margin-top:10px}
-  .filter-in{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-  .filter-in input[type=text]{min-width:220px}
-  tfoot .tot-row td{font-weight:700;background:var(--panel2);border-top:2px solid var(--accent);position:sticky;bottom:0;z-index:1}
-  tfoot .tot-row .tot-val{color:var(--accent);font-variant-numeric:tabular-nums}
-  tfoot .tot-row .tot-lbl{color:var(--muted);font-size:11.5px;font-weight:600}
-  .blocked-row td{ background:rgba(211,59,74,.07); }
-  .blocked-row td.l{ color:var(--bad); }
-  .esc-list{ display:flex;flex-direction:column;gap:6px; }
-  .esc-item{ display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:6px 10px;border-radius:8px;background:rgba(211,59,74,.09);border:1px solid rgba(211,59,74,.22); }
-  .score-val{ font-variant-numeric:tabular-nums;font-weight:650;color:var(--accent); }
-  /* loading overlay */
-  #loadOverlay{position:fixed;inset:0;background:rgba(244,246,251,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:100;font-size:15px;font-weight:600;color:var(--muted)}
-  #loadOverlay .spinner{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;background:#f4f6fb;color:#1a1a2e}
+header{background:#1a1a2e;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+header h1{font-size:16px;font-weight:600;letter-spacing:.5px}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab-btn{background:rgba(255,255,255,.12);border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s}
+.tab-btn.active{background:#3b82f6}
+.tab-btn:hover:not(.active){background:rgba(255,255,255,.2)}
+#statusBar{background:#fff;border-bottom:1px solid #e2e8f0;padding:8px 20px;display:flex;align-items:center;gap:16px;font-size:12px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;margin-right:4px}
+.status-dot.ok{background:#22c55e}.status-dot.warn{background:#f59e0b}
+#statusText{color:#64748b}
+.import-bar{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.import-bar label{font-weight:500;color:#374151;font-size:12px}
+.import-bar input[type=file]{font-size:12px}
+.btn{background:#3b82f6;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500}
+.btn:hover{background:#2563eb}
+.btn.secondary{background:#f1f5f9;color:#374151}.btn.secondary:hover{background:#e2e8f0}
+.btn.green{background:#22c55e}.btn.green:hover{background:#16a34a}
+.config-panel{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.cfg-group{display:flex;align-items:center;gap:6px;font-size:12px}
+.cfg-group label{color:#64748b;white-space:nowrap}
+.cfg-group input,.cfg-group select{border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:90px;color:#1a1a2e}
+.tab-content{display:none;padding:16px 20px}
+.tab-content.active{display:block}
+.filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.filter-bar input{border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:260px}
+.filter-bar select{border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px}
+.tbl-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th{background:#1e293b;color:#e2e8f0;padding:8px 10px;text-align:left;font-size:11px;font-weight:600;white-space:nowrap;position:sticky;top:0;z-index:10}
+th.num{text-align:right}
+td{padding:7px 10px;border-bottom:1px solid #f1f5f9;font-size:12px;white-space:nowrap}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+tr:hover td{background:#f8fafc}
+tr:last-child td{border-bottom:none}
+.pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700}
+.pill-A{background:#dcfce7;color:#166534}.pill-B{background:#fef9c3;color:#854d0e}.pill-C{background:#f1f5f9;color:#475569}
+.pill-P1{background:#dbeafe;color:#1e40af}.pill-P2{background:#fef3c7;color:#92400e}.pill-P3{background:#fce7f7;color:#9d174d}
+.score-bar{display:inline-flex;align-items:center;gap:6px}
+.score-bar .bar{height:10px;border-radius:3px;background:#3b82f6;min-width:2px}
+.score-val{font-weight:700;color:#1a1a2e}
+.empty{text-align:center;padding:60px;color:#94a3b8}
+.empty h3{font-size:16px;margin-bottom:8px}
+.summary-row{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;min-width:140px}
+.card h4{font-size:11px;color:#64748b;margin-bottom:4px}
+.card .val{font-size:20px;font-weight:700;color:#1a1a2e}
+.card .sub{font-size:11px;color:#94a3b8}
+.sched-controls{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
 </style>
 </head>
 <body>
 
-<!-- Loading overlay shown while fetching from Google Sheets -->
-<div id="loadOverlay">
-  <div class="spinner"></div>
-  <span id="loadMsg">Loading data from Google Sheets…</span>
-</div>
-
 <header>
-  <div>
-    <h1>Production Scheduler</h1>
-    <span class="sub">TAB-1 Supply Planner inputs · TAB-2 capacitated scheduler · Target = priority × DRR · shared daily line · Google Sheets backend</span>
-  </div>
-  <div class="cm-pick">
-    <label for="cmSelect">Contract manufacturer</label>
-    <select id="cmSelect"></select>
+  <h1>Production Scheduler</h1>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('priority',this)">Priority Scoring</button>
+    <button class="tab-btn" onclick="showTab('planning',this)">Production Plan</button>
   </div>
 </header>
 
-<!-- Google Sheets sync bar -->
-<div class="sync-bar">
-  <button id="loadSheetBtn" class="ghost">↻ Reload from Sheet</button>
-  <button id="saveSheetBtn" class="save-btn">💾 Save to Sheet</button>
-  <span class="sync-status" id="syncStatus">Not synced yet</span>
+<div id="statusBar">
+  <span class="status-dot" id="gsDot"></span><span id="statusText">Loading MRP data from Google Sheets…</span>
+  <span style="margin-left:auto;color:#94a3b8;font-size:11px" id="lastUpdated"></span>
 </div>
 
-<nav class="tabs">
-  <button data-tab="tab1" class="active">Production Planner<span class="t-sub">Inputs · supply plan M1 / M2</span></button>
-  <button data-tab="tab2">Scheduler<span class="t-sub">Run &amp; schedule</span></button>
-</nav>
+<div class="import-bar">
+  <label>Stock Upload (FG / RM / PM):</label>
+  <input type="file" id="stockFile" accept=".xlsx,.csv" onchange="importStock(this)">
+  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code · FG Stock (units) · RM Stock (kg) · PM Stock (units)</span>
+  <button class="btn secondary" onclick="downloadTemplate()">Download Template</button>
+  <button class="btn green" onclick="loadGSheet()">&#8635; Refresh MRP Data</button>
+</div>
 
-<main>
-  <!-- ============================ TAB 1 — SUPPLY PLANNER ============================ -->
-  <div id="tab1" class="tabpanel active">
-    <section>
-      <h2>Inputs Tab — Supply Planner <span class="hint">enter the production plan for M1 &amp; M2 · Tonnage = (pack size g × plan units) ÷ 10⁶</span></h2>
-      <div class="filter-in">
-        <input id="t1Filter" type="text" placeholder="Filter SKUs by code or name…">
-        <button class="ghost" id="importXlsxBtn">Import Excel (.xlsx)</button>
-        <button class="ghost" id="importCsv1Btn">Import CSV</button>
-        <button class="ghost" id="template1Btn">Download template (CSV)</button>
-        <input id="xlsxFile" type="file" accept=".xlsx" style="display:none">
-        <input id="csv1File" type="file" accept=".csv" style="display:none">
-        <span class="muted" id="t1Count"></span>
-        <button id="goTab2Btn" style="margin-left:auto">Open scheduler (TAB-2) ▶</button>
-      </div>
-      <div class="scroll" style="max-height:460px">
-        <table class="inp-table">
-          <thead><tr>
-            <th class="l">SKU Code</th><th class="l">SKU Name</th>
-            <th title="Pack size in grams">Pack Size (g)</th>
-            <th>Production Plan M1</th>
-            <th title="(Pack size g × plan units) ÷ 10⁶">Tonnage Plan M1</th>
-            <th>Production Plan M2</th>
-            <th title="(Pack size g × plan units) ÷ 10⁶">Tonnage Plan M2</th>
-          </tr></thead>
-          <tbody id="t1Body"></tbody>
-          <tfoot id="t1Foot"></tfoot>
-        </table>
-      </div>
-      <div class="footnote">
-        <b>Import Excel (.xlsx)</b> reads the workbook in-browser and matches rows by exact <b>SKU Code</b> — it fills any recognised columns it finds across all sheets
-        (Pack Size, Production Plan M1/M2, plus the scheduler columns on TAB-2). <b>Tonnage = (pack size grams × production plan units) ÷ 10⁶</b> (tonnes), computed live.
-        <b>Production Plan M1</b> flows through to TAB-2 as the <b>Monthly supply plan (X)</b>, which drives the <b>Balance to Go (X − Target)</b> column.
-      </div>
-    </section>
+<div class="config-panel">
+  <div class="cfg-group"><label>Line Cap (kg/week):</label><input type="number" id="cfgLineCap" value="5000" min="0"></div>
+  <div class="cfg-group"><label>Target FG DOC (days):</label><input type="number" id="cfgTargetFgDoc" value="30" min="1"></div>
+  <div class="cfg-group"><label>Target RM/PM DOC:</label><input type="number" id="cfgTargetDoc" value="60" min="1"></div>
+  <div class="cfg-group"><label>Horizon (weeks):</label><input type="number" id="cfgHorizon" value="8" min="1" max="52"></div>
+  <div class="cfg-group"><label>Filter Class:</label>
+    <select id="cfgClass" onchange="recompute()"><option value="">All</option><option>A</option><option>B</option><option>C</option></select>
   </div>
-
-  <!-- ============================ TAB 2 — SCHEDULER ============================ -->
-  <div id="tab2" class="tabpanel">
-    <section>
-      <h2>Configuration</h2>
-      <input id="cfgCap" type="hidden" value="10000">
-      <input id="cfgMin" type="hidden" value="1000">
-      <input id="cfgMax" type="hidden" value="10000">
-      <div class="controls">
-        <div class="ctl"><label>Horizon (days)</label><input id="cfgHorizon" type="number" value="56" min="1" step="1"></div>
-        <div class="ctl"><label>Days / week</label><input id="cfgWeek" type="number" value="7" min="1" step="1"></div>
-        <div class="ctl"><label>Mode</label>
-          <select id="cfgMode"><option value="max_fill">max_fill</option><option value="uniform">uniform</option></select>
-        </div>
-        <div class="ctl"><label>Gate: replenish lead (days)</label><input id="cfgGate" type="number" value="21" min="0" step="1" title="RM DOC and PM DOC must be ≥ this"></div>
-        <div class="ctl"><label>Target DOC norm (days)</label><input id="cfgDocNorm" type="number" value="20" min="1" step="1" title="RMConfidence denominator (cap 1.0)"></div>
-        <div class="ctl"><label>&nbsp;</label><button id="runBtn">Run scheduler ▶</button></div>
-      </div>
-      <div class="footnote"><b>Line Cap</b>, <b>Min Cap</b> and <b>Max Cap</b> are <b>per-SKU</b> (see the columns in the table below — edit a row to override). The line stays <b>one shared line</b>: the engine schedules against a single shared cap equal to the largest per-SKU Line Cap. <b>Min Cap</b> = min-run guard, <b>Max Cap</b> = max units of a SKU per day.</div>
-    </section>
-
-    <section>
-      <h2>Scheduler inputs — <b id="cmTag"></b>
-        <span class="hint">edit DRR &amp; DOI · Priority from DOI (&lt;15→P0, 15–&lt;21→P1, 21–30→P2, &gt;30→P3) · Target Run QTY = P0/P3:10×DRR, P1/P2:15×DRR · Balance to Go = supply plan − target</span></h2>
-      <div class="filter-in">
-        <input id="t2Filter" type="text" placeholder="Filter SKUs by code or name…">
-        <button class="ghost" id="zeroBtn">Reset DRR to 0</button>
-        <button class="ghost" id="importCsv2Btn">Import CSV</button>
-        <button class="ghost" id="template2Btn">Download template (CSV)</button>
-        <input id="csv2File" type="file" accept=".csv" style="display:none">
-        <span class="muted" id="t2Count"></span>
-      </div>
-      <div class="scroll" style="max-height:420px">
-        <table class="inp-table">
-          <thead><tr>
-            <th class="l">SKU Code</th><th class="l">SKU Name</th>
-            <th class="l" title="Assign A/B/C">SKU Class</th>
-            <th>Current Stock</th>
-            <th>DRR</th><th>DOI</th>
-            <th title="FG Days of Cover = Stock ÷ DRR">FG DOC</th>
-            <th class="l" title="DOI-derived priority (read-only)">DOI Pri</th>
-            <th title="RM Stock in kg — RM DOC auto-computed">RM Stock (kg)</th>
-            <th title="RM DOC = RM Stock×1000 ÷ (DRR×Pack Size) — auto-computed">RM DOC</th>
-            <th title="PM Stock in units — PM DOC auto-computed">PM Stock (units)</th>
-            <th title="PM DOC = PM Stock ÷ DRR — auto-computed">PM DOC</th>
-            <th class="l" title="P1=Stable P2=Simmering P3=Volatile">Volatility</th>
-            <th title="1 ÷ FG_DOC">Urgency</th>
-            <th title="ABC × Volatility weight">Str.Wt</th>
-            <th title="min(RM,PM)÷norm capped 1">RMConf</th>
-            <th title="Score = Urgency × Str.Wt × RMConf — primary rank">Score ▼</th>
-            <th title="Per-SKU view of the shared daily line">Line Cap</th>
-            <th title="Min-run guard for this SKU">Min Cap</th>
-            <th title="Max units of this SKU per day">Max Cap</th>
-            <th title="Y = P0/P3:10×DRR, P1/P2:15×DRR">Target Run QTY</th>
-            <th title="X = Production Plan M1 (from TAB-1)">Monthly supply plan</th>
-            <th title="X − Y">Balance to Go</th>
-          </tr></thead>
-          <tbody id="t2Body"></tbody>
-        </table>
-      </div>
-      <div class="footnote">CSV import matches rows by exact <b>SKU Code</b>; recognised columns: SKU Class, Current Stock, DRR, DOI, Line Cap, Min Cap, Max Cap (blank cap cells keep the seeded default). <b>Priority</b> is from the DOI band and <b>Target Run QTY</b> from priority × DRR — both computed (any Target/Priority columns in an import are ignored). <b>Monthly supply plan (X)</b> mirrors Production Plan M1 from TAB-1. Codes are never auto-corrected (note <span class="code">.B0_N</span> vs <span class="code">.BO_N</span>).</div>
-    </section>
-
-    <section id="summarySec" style="display:none">
-      <h2>Summary</h2>
-      <div class="kpis" id="kpis"></div>
-    </section>
-
-    <section id="warnSec" style="display:none">
-      <h2>Warnings</h2>
-      <div class="warns" id="warns"></div>
-    </section>
-
-
-    <section id="escalSec" style="display:none">
-      <h2>Escalation list — material cover below gate <span class="hint">these SKUs cannot be scheduled until procurement resolves the shortage</span></h2>
-      <div class="esc-list" id="escalList"></div>
-    </section>
-
-    <section id="weeklySec" style="display:none">
-      <h2>Weekly schedule <span class="hint">units per SKU per week, sorted by priority</span>
-        <button class="ghost" style="float:right;padding:5px 10px" id="dlWeekly">Export CSV</button></h2>
-      <div class="scroll"><table id="weeklyTbl"></table></div>
-    </section>
-
-    <section id="daySec" style="display:none">
-      <h2>Day-wise schedule <span class="hint">D1…Dn per SKU · line utilisation bar per day</span>
-        <button class="ghost" style="float:right;padding:5px 10px" id="dlDay">Export CSV</button></h2>
-      <div class="scroll"><table id="dayTbl"></table></div>
-    </section>
-
-    <section id="shortSec" style="display:none">
-      <h2>Shortfalls <span class="hint">targets that could not be fully scheduled within the horizon</span></h2>
-      <div class="scroll"><table id="shortTbl"></table></div>
-    </section>
+  <div class="cfg-group"><label>Filter Priority:</label>
+    <select id="cfgPriority" onchange="recompute()"><option value="">All</option><option>P1</option><option>P2</option><option>P3</option></select>
   </div>
-</main>
+  <button class="btn" onclick="recompute()">Recalculate</button>
+  <button class="btn secondary" onclick="downloadCSV()">&#11015; Export CSV</button>
+</div>
+
+<!-- Priority Scoring Tab -->
+<div id="tab-priority" class="tab-content active">
+  <div class="filter-bar">
+    <input type="text" id="scoreFilter" placeholder="Filter by SKU code or name…" oninput="renderScoreTable()">
+  </div>
+  <div class="summary-row" id="summaryCards"></div>
+  <div class="tbl-wrap">
+    <table id="scoreTable">
+      <thead><tr>
+        <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
+        <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
+        <th class="num">Urgency</th><th class="num">Str.Wt</th>
+        <th class="num">RM Stock (kg)</th><th class="num">RM Req (kg/30d)</th><th class="num">RM DOC</th>
+        <th class="num">PM Stock</th><th class="num">PM Req (/30d)</th><th class="num">PM DOC</th>
+        <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
+      </tr></thead>
+      <tbody id="scoreBody"><tr><td colspan="18" class="empty"><h3>Loading…</h3></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Production Plan Tab -->
+<div id="tab-planning" class="tab-content">
+  <div class="sched-controls">
+    <input type="text" id="planFilter" placeholder="Filter SKUs…" oninput="renderPlanTable()" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:220px">
+    <button class="btn" onclick="runSchedule()">Run Schedule</button>
+    <span style="font-size:12px;color:#64748b" id="schedStatus"></span>
+  </div>
+  <div class="summary-row" id="planSummary"></div>
+  <div class="tbl-wrap">
+    <table id="planTable">
+      <thead id="planHead"></thead>
+      <tbody id="planBody"><tr><td colspan="8" class="empty"><h3>Run schedule to see plan</h3><p>Configure settings above and click "Run Schedule".</p></td></tr></tbody>
+    </table>
+  </div>
+</div>
 
 <script>
-/* ============================================================================
-   CONTRACT MANUFACTURERS — base registry (names + fallback SKU list for Sapiens).
-   When Google Sheets data loads successfully, the .skus and .data fields are
-   replaced with live sheet data. This lets the app still work if the sheet is
-   temporarily unreachable.
-   ============================================================================ */
-
-const SAPIENS_SKUS = [
-  ["MWLJNTP.0003.B0_N","LJ NutriMix 2+ 350 gm Chocolate Jar"],
-  ["MWLJNTP.00027.B0_N","LJ NutriMix 2+ 350 gm Chocolate Pouch"],
-  ["MWLJNTP.00615.BO_N","Nutrimix 2+ Chocolate 200g Pouch"],
-  ["MWLJNTP.00507.B0_N","LJ NutriMix 2+ (Chocolate) - 1 kg"],
-  ["MWLJNTS.0001.B0_N","LJ NutriMix 2+ 20 g Chocolate Mini"],
-  ["MWLJNTP.00618.BO_N","LJ Nutrimix 2+ Pack of 6 - Chocolate"],
-  ["MWLJNTP.00483.B0_N","LJ NutriMix 2+ Belgian Chocolate - 350 g"],
-  ["MWLJNTK.00367.B0_N","LJ NutriMix Lite 2+ 350 gm Chocolate Jar"],
-  ["MWLJNTP.000836.B0_N","LJ Nutrimix 2+ Vanilla lite (350 gm)"],
-  ["MWLJNTP.00527.BO_N","LJ NutriMix 2+ Lite Vanilla 1Kg"],
-  ["MWLJNTP.00122.B0_N","LJ NutriMix 2+ 350 gm Vanilla Jar"],
-  ["MWLJNTP.00034.B0_N","LJ NutriMix 2+ 350 gm Strawberry Jar"],
-  ["MWLJNTS.0003.B0_N","LJ NutriMix 2+ 20 g Strawberry Mini"],
-  ["MWLJNTP.00699.B0_N","LJ NutriMix 2+ Unsweetened - 350 gm Pouch"],
-  ["MWLJNTP.000709.B0_N","LJ NutriMix 2+ Lite - 1 kg Pouch"],
-  ["MWLJNTP.00551.BO_N","LJ Nutrimix 2+ Pack of 6 - CSV"],
-  ["MWLJNTP.00059.B0_N","LJ NutriMix 7+ 350 gm Chocolate Jar"],
-  ["MWLJNTP.00423.B0_N","LJ NutriMix 7+ (Pouch) - 350g"],
-  ["MWLJNTP.00616.BO_N","Nutrimix 7+ Chocolate 200gm Pouch"],
-  ["MWLJNTP.00500.B0_N","LJ NutriMix 7+ (Chocolate) - 1kg"],
-  ["MWLJNTS.0006.BO_N","LJ NutriMix 7+ 20 g Chocolate Mini"],
-  ["MWLJNTP.00617.BO_N","LJ Nutrimix 7+ Pack of 6 - Chocolate"],
-  ["MWLJNTP.00698.B0_N","LJ NutriMix Lite 7+ 350 gm Chocolate Jar"],
-  ["MWLJNTP.00609.BO_N","LJ Nutrimix Lite 7+ Chocolate 1kg pouch"],
-  ["MWLJNTP.00177.B0_N","LJ NutriMix 7+ 350 gm Strawberry Jar"],
-  ["MWLJNTP.00636.B0_N","LJ NutriMix 7+ Vanilla 350 gm Jar"],
-  ["MWLJNTP.00608.BO_N","LJ Nutrimix Lite 7+ Vanilla 1 kg pouch"],
-  ["MWLJNTP.00610.BO_N","LJ Nutrimix Lite 7+ Vanilla 350 gm"],
-  ["MWLJNTP.00586.BO_N","LJ Nutrimix 7+ Pack of 6 - CSV"],
-  ["MWLJNTP.00126.B0_N","LJ NutriMix 13+ 350 gm Jar"],
-  ["MWLJNTP.00664.BO_N","Little Joys Nutrimix 13+ Vanilla Flavour 300g"],
-  ["MWLJNTP.00541.BO_N","LJ Nutrimix 13+ Chocolate 1 kg (Pack of 3)"],
-  ["MWLJNTP.00339.B0_N","LJ NutriMix for Mothers - 400 gm pouch - Chocolate"],
-  ["MWMMNTP.00207.AAAA.B0_N","MM Creatine Mixed Fruit Flavored"],
-  ["MWMMNTP.0035.AAAABO_N","MM Creatine Flavoured - Lemon"],
-  ["MWMMNTP.6348.AAAABO_N","MM Creatine Flavoured - Guava Chilli"],
-  ["MWLJNTP.00553.BO_N","LJ Multipurpose Nutrimix 250 gm"],
-  ["MWMMNTP.6356.AAAABO_N","MM Creatine Mango"],
-  ["MWMMNTP.6369.AAAABO_N","MM Creatine + Electrolyte Orange"],
-];
-
-const MANUFACTURERS = {
-  sapiens: { name: 'Sapiens', skus: SAPIENS_SKUS },
+// ─── JAS Class Lookup (216 SKUs) ─────────────────────────────────────────────
+const JAS_CLASS = {
+  'MWMMHRP.0004.AAAA.B0_N':{c:'A',p:'P1',w:1.0},'MWLJNTP.0003.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMHRP.0008.AAAA.B0_R':{c:'A',p:'P1',w:1.0},'MWBWHFP.00575.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWSKP.00418.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.0002.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWLJNTP.00059.B0_N':{c:'A',p:'P1',w:1.0},'MWMMHRP.0006.AAAA.B0_R':{c:'A',p:'P1',w:1.0},
+  'MWBWSKP.00684.B0_N':{c:'A',p:'P2',w:1.2},'MWBWSKP.00703.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWHFP.00531.B0_N':{c:'A',p:'P2',w:1.2},'MWMMHRK.6357.AAAABO_N':{c:'A',p:'P3',w:1.5},
+  'MWBWBCP.00166.B0_N':{c:'A',p:'P1',w:1.0},'MWBWHFP.00204.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWLJNTP.00507.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.00019.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWLJNTP.00051.B0_N':{c:'A',p:'P1',w:1.0},'MWBWHFP.00672.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWBCP.00167.B0_N':{c:'A',p:'P3',w:1.5},'MWMMHRP.6622.B0_R':{c:'A',p:'P2',w:1.2},
+  'MWLJNTK.00367.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.00500.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMHRP.2050.AAAA.B0_N':{c:'A',p:'P1',w:1.0},'MWLJNTP.0007.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMHRP.6337.AAAA.B0_N':{c:'A',p:'P1',w:1.0},'MWBWHFP.00145.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWLJNTP.00480.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.00572.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWSKP.00436.B0_N':{c:'A',p:'P2',w:1.2},'MWMMPRK.2097.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWBWHFP.00625.B0_N':{c:'A',p:'P1',w:1.0},'MWMMBDP.0001.AAAA.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWBWSKP.00589.B0_N':{c:'A',p:'P2',w:1.2},'MWBWSKP.00614.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWLJNTP.00126.B0_N':{c:'A',p:'P1',w:1.0},'MWBWHFP.00310.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWSKP.00526.B0_N':{c:'A',p:'P2',w:1.2},'MWMMBDP.0006.AAAA.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMHRP.6190.AAAA.B0_N':{c:'A',p:'P1',w:1.0},'MWBWSKP.00787.B0_N':{c:'A',p:'P3',w:1.5},
+  'MWBWSKP.00681.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.00027.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWLJNTP.00248.B0_N':{c:'A',p:'P1',w:1.0},'MWMMNTP.0171.AAAA.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWLJNTP.00122.B0_N':{c:'A',p:'P1',w:1.0},'MWMMHRP.0010.AAAA.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMHRP.6298.AAAA.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.00553.BO_N':{c:'A',p:'P3',w:1.5},
+  'MWLJNTP.00380.B0_N':{c:'A',p:'P1',w:1.0},'MWBWSKP.00214.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMBDP.0132.AAAA.B0_R':{c:'A',p:'P2',w:1.2},'MWLJNTP.000801.B0_N':{c:'A',p:'P3',w:1.5},
+  'MWLJNTP.00034.B0_N':{c:'A',p:'P1',w:1.0},'MWLJNTP.00339.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWMMNTP.00208.AAAA.B0_N':{c:'A',p:'P3',w:1.5},'MWBWSKP.00328.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWLJNTP.00536.B0_N':{c:'A',p:'P2',w:1.2},'MWMMBDP.0005.AAAA.B0_N':{c:'A',p:'P1',w:1.0},
+  'MWMMHRP.7031.B0_N':{c:'A',p:'P1',w:1.0},'MWLJNTP.000748.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWSKP.00525.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.000755.B0_N':{c:'A',p:'P2',w:1.2},
+  'MWBWSKP.00626.B0_N':{c:'A',p:'P2',w:1.2},'MWBWNTP.00356.B0_N':{c:'A',p:'P3',w:1.5},
+  'MWLJNTP.000709.B0_N':{c:'A',p:'P2',w:1.2},'MWLJNTP.00698.B0_N':{c:'B',p:'P2',w:0.9},
+  'MWMMPRP.2092.B0_N':{c:'B',p:'P1',w:0.7},'MWBWHFP.00637.B0_N':{c:'B',p:'P2',w:0.9},
+  'MWBWSKP.00788.B0_N':{c:'B',p:'P3',w:1.1},'MWLJNTP.00056.B0_N':{c:'B',p:'P1',w:0.7},
+  'MWMMHRP.0001.AAAA.B0_N':{c:'B',p:'P1',w:0.7},'MWLJNTP.00023.B0_N':{c:'B',p:'P1',w:0.7},
+  'MWBWSKP.00687.B0_N':{c:'B',p:'P2',w:0.9},'MWLJNTP.00636.B0_N':{c:'B',p:'P2',w:0.9},
+  'MWBWSKP.00777.B0_N':{c:'B',p:'P3',w:1.1},'MWMMHRP.6286.AAAA.B0_N':{c:'B',p:'P1',w:0.7},
+  'MWBWSKP.00241.B0_N':{c:'B',p:'P1',w:0.7},'MWBWSKP.00428.B0_N':{c:'B',p:'P1',w:0.7},
+  'MWLJNTP.000759.B0_N':{c:'B',p:'P3',w:1.1},'MWBWBCP.00168.B0_N':{c:'B',p:'P3',w:1.1},
+  'MWBWSKK.00801.B0_N':{c:'B',p:'P3',w:1.1},'MWMMHRP.7121.B0_R':{c:'B',p:'P3',w:1.1},
+  'MWBWHFP.00711.B0_N':{c:'B',p:'P3',w:1.1},'MWLJNTP.00177.B0_N':{c:'B',p:'P1',w:0.7},
+  'MWBWSKP.00697.B0_N':{c:'B',p:'P2',w:0.9},'MWMMHRP.0014.AAAA.B0_N':{c:'B',p:'P1',w:0.7},
+  'MWLJNTP.000795.B0_N':{c:'B',p:'P3',w:1.1},'MWMMNTP.00207.AAAA.B0_N':{c:'B',p:'P3',w:1.1},
+  'MWBWSKP.00646.B0_N':{c:'B',p:'P2',w:0.9},'MWLJNTP.000836.B0_N':{c:'B',p:'P3',w:1.1},
+  'MWBWSKP.00648.B0_N':{c:'B',p:'P2',w:0.9},'MWBWSKP.00680.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.000810.B0_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00659.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00532.B0_N':{c:'C',p:'P2',w:0.5},'MWBWHFP.00541.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00542.BO_N':{c:'C',p:'P3',w:0.6},'MWLJNTP.00551.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTP.00534.B0_N':{c:'C',p:'P2',w:0.5},'MWLJNTP.00571.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00481.B0_N':{c:'C',p:'P2',w:0.5},'MWMMNTP.6369.AAAABO_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTP.00518.B0_N':{c:'C',p:'P3',w:0.6},'MWLJNTP.00533.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWNTP.00357.B0_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00797.B0_N':{c:'C',p:'P3',w:0.6},
+  'MWBWSKP.00771.B0_N':{c:'C',p:'P3',w:0.6},'MWLJNTP.00423.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWBWSKP.00672.B0_N':{c:'C',p:'P2',w:0.5},'MWBWSKP.00650.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWSKP.00240.B0_N':{c:'C',p:'P1',w:0.4},'MWBWSKP.00584.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00636.BO_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00586.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWHFP.0018.B0_N':{c:'C',p:'P1',w:0.4},'MWBWNTP.00168.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWLJNTP.00584.BO_N':{c:'C',p:'P3',w:0.6},'MWLJNTP.00607.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWLJDCP.0001.B0_N':{c:'C',p:'P1',w:0.4},'MWBWSKP.00651.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00609.BO_N':{c:'C',p:'P3',w:0.6},'MWLJNTK.00366.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00664.BO_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00265.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWHFP.00626.B0_N':{c:'C',p:'P2',w:0.5},'MWLJNTP.000820.B0_N':{c:'C',p:'P3',w:0.6},
+  'MWBWSKP.00169.B0_N':{c:'C',p:'P1',w:0.4},'MWBWSKP.00132.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00618.BO_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00587.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWBWSKP.00206.B0_N':{c:'C',p:'P2',w:0.5},'MWBWNTP.00348.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWMMBDK.0280.AAAA.B0_N':{c:'C',p:'P2',w:0.5},'MWBWHFP.00229.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWLJNTP.00241.B0_N':{c:'C',p:'P1',w:0.4},'MWBWSKP.00676.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00483.B0_N':{c:'C',p:'P1',w:0.4},'MWMMHTP.0001.AAAA.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWLJNTP.000809.B0_N':{c:'C',p:'P3',w:0.6},'MWBWHFP.00172.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWMMHRP.0009.AAAA.B0_R':{c:'C',p:'P1',w:0.4},'MWLJDCP.00011.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWLJNTP.00541.BO_N':{c:'C',p:'P3',w:0.6},'MWBWHFP.00635.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWLJNTP.00563.B0_N':{c:'C',p:'P2',w:0.5},'MWBWNTP.00347.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWMMHRP.0002.AAAA.B0_N':{c:'C',p:'P1',w:0.4},'MWLJNTP.00615.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBWHFP.00188.BO_N':{c:'C',p:'P3',w:0.6},'MWBBSKP.00812.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTP.00617.BO_N':{c:'C',p:'P3',w:0.6},'MWMMNTP.0035.AAAABO_N':{c:'C',p:'P3',w:0.6},
+  'MWBWHFP.0019.B0_N':{c:'C',p:'P1',w:0.4},'MWMMHTP.0005.AAAA.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWBWSKP.00652.B0_N':{c:'C',p:'P2',w:0.5},'MWBWNTP.00345.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00699.B0_N':{c:'C',p:'P3',w:0.6},'MWLJNTS.0001.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00527.BO_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00401.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWMMNTP.6345.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00437.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWSKK.00201.B0_N':{c:'C',p:'P2',w:0.5},'MWMMNTP.00205.AAAA.B0_N':{c:'C',p:'P3',w:0.6},
+  'MWBWSKP.0001.B0_N':{c:'C',p:'P1',w:0.4},'MWLJNTP.00605.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBWHFP.00707.B0_N':{c:'C',p:'P3',w:0.6},'MWMMHTP.0127.AAAA.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWBCP.00170.B0_N':{c:'C',p:'P3',w:0.6},'MWBWHFP.0020.B0_N':{c:'C',p:'P1',w:0.4},
+  'MWMMHRP.0018.AAAA.B0_N':{c:'C',p:'P2',w:0.5},'MWBWBCP.00188.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBWHFP.00161.B0_N':{c:'C',p:'P2',w:0.5},'MWMMHRP.7044.B0_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTS.00043.B0_N':{c:'C',p:'P2',w:0.5},'MWBWHFP.00538.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBBSKP.00807.BO_N':{c:'C',p:'P3',w:0.6},'MWBBSKP.00808.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTS.0002.B0_N':{c:'C',p:'P2',w:0.5},'MWBWHFP.00225.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWHFP.00574.B0_N':{c:'C',p:'P2',w:0.5},'MWLJNTS.0006.BO_N':{c:'C',p:'P2',w:0.5},
+  'MWMMNTP.6348.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMSKP.5061.AAAA.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJGNP.00022.B0_N':{c:'C',p:'P2',w:0.5},'MWLJNTP.00520.B0_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTS.0003.B0_N':{c:'C',p:'P2',w:0.5},'MWMMNTP.0148.AAAA.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBWSKP.00653.B0_N':{c:'C',p:'P2',w:0.5},'MWBWSKS.0045.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWBBHFP.00199.BO_N':{c:'C',p:'P3',w:0.6},'MWBBNTP.00195.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBBNTP.2059.BO_N':{c:'C',p:'P2',w:0.5},'MWBBOCP.0010.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBBSKP.00804.BO_N':{c:'C',p:'P3',w:0.6},'MWBBSKP.00806.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBWSKK.00793.B0_N':{c:'C',p:'P2',w:0.5},'MWBWSKK.00821.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWBWSKK.00822.BO_N':{c:'C',p:'P3',w:0.6},'MWBWSKP.00779.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWLJNTP.00586.BO_N':{c:'C',p:'P3',w:0.6},'MWLJNTP.00694.BO_N':{c:'C',p:'P3',w:0.6},
+  'MWLJNTP.00746.BO_N':{c:'C',p:'P3',w:0.6},'MWLJNTP.00501.B0_N':{c:'C',p:'P2',w:0.5},
+  'MWMMNTP.6356.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMNTP.000191.AAAAB0_N':{c:'C',p:'P3',w:0.6},
+  'MWMMHRS.0017.AAAA.B0_N':{c:'C',p:'P1',w:0.4},'MWMMNTK.6352.AAAABO_N':{c:'C',p:'P3',w:0.6},
+  'MWMMNTP.0036.AAAABO_N':{c:'C',p:'P2',w:0.5},'MWMMNTP.6344.AAAABO_N':{c:'C',p:'P2',w:0.5},
+  'MWMMNTP.6349.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMNTP.6358.AAAABO_N':{c:'C',p:'P3',w:0.6},
+  'MWMMNTP.6367.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMSKP.5064.AAAABO_N':{c:'C',p:'P3',w:0.6},
+  'MWMMSKP.5065.AAAABO_N':{c:'C',p:'P3',w:0.6},'MWMMSKP.5066.AAAABO_N':{c:'C',p:'P3',w:0.6}
 };
-const DEFAULT_CM = 'sapiens';
 
-/* ============================================================================
-   GOOGLE SHEETS SYNC
-   ============================================================================ */
-function setSyncStatus(msg, cls=''){
-  const el=document.getElementById('syncStatus');
-  el.textContent=msg; el.className='sync-status '+(cls||'');
+const MRP_SHEET_ID = '1PDvEjSHOqrn902Y6vIpRvVwlkw3B5HpwP4w6_Stl58o';
+const GS_TABS = { skuMaster:'SKU Master', rmBom:'RM BOM', pmBom:'PM BOM', drr:'DRR' };
+
+let gsData    = null;
+let stockData = {};
+let rows      = [];
+let schedPlan = [];
+
+// ─── GSheet fetch ────────────────────────────────────────────────────────────
+async function gvizFetch(tab) {
+  const url = `https://docs.google.com/spreadsheets/d/${MRP_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Failed: ${tab}`);
+  return r.text();
 }
-
-/**
- * Load all SKU data from the Google Sheets API route.
- * On success, replaces MANUFACTURERS data with live sheet values.
- * On failure, keeps the hardcoded fallback and shows a warning.
- */
-async function loadFromSheet(){
-  setSyncStatus('Loading from sheet…');
-  document.getElementById('loadSheetBtn').disabled=true;
-  document.getElementById('saveSheetBtn').disabled=true;
-  try {
-    const res  = await fetch('/api/sheet');
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const mfrs = data.manufacturers || {};
-
-    if(Object.keys(mfrs).length === 0){
-      setSyncStatus('Sheet is empty — showing fallback data. Add rows and reload.','');
-    } else {
-      // Merge sheet data into MANUFACTURERS
-      for(const [id, cm] of Object.entries(mfrs)){
-        if(!MANUFACTURERS[id]) MANUFACTURERS[id] = { name: id.charAt(0).toUpperCase()+id.slice(1) };
-        MANUFACTURERS[id].skus  = cm.skus.map(s=>[s.code, s.name]);
-        MANUFACTURERS[id].sheetData = cm.skus; // full row objects with all fields
-      }
-      const ts = new Date().toLocaleTimeString();
-      setSyncStatus(`Loaded ${Object.keys(mfrs).length} manufacturer(s) · ${ts}`, 'ok');
-    }
-  } catch(e){
-    console.warn('Could not load from sheet:', e);
-    setSyncStatus('Could not reach sheet — using fallback data. Check env vars.', 'err');
+function parseCsv(text) {
+  const lines = text.trim().split('\n');
+  const hdr = parseRow(lines[0]);
+  return lines.slice(1).map(l => {
+    const v = parseRow(l), o = {};
+    hdr.forEach((h,i) => o[h.trim()] = (v[i]||'').trim());
+    return o;
+  }).filter(r => Object.values(r).some(v=>v));
+}
+function parseRow(line) {
+  const cols=[]; let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){inQ=!inQ;}
+    else if(ch===','&&!inQ){cols.push(cur);cur='';}
+    else{cur+=ch;}
   }
-
-  // Re-init dropdown + reload current manufacturer
-  initManufacturers();
-  loadManufacturer(currentCm);
-
-  document.getElementById('loadSheetBtn').disabled=false;
-  document.getElementById('saveSheetBtn').disabled=false;
-  document.getElementById('loadOverlay').style.display='none';
+  cols.push(cur);
+  return cols.map(c=>c.replace(/^"|"$/g,''));
 }
+function n(v){const x=parseFloat(v);return isNaN(x)?0:x;}
 
-async function saveToSheet(){
-  const btn=document.getElementById('saveSheetBtn');
-  btn.textContent='Saving…'; btn.disabled=true;
-  setSyncStatus('Saving to sheet…');
+async function loadGSheet() {
+  setStatus('Loading MRP data…','warn');
   try {
-    const skus=[...state.values()].map(r=>({
-      code:r.code, name:r.name,
-      packSize:r.packSize, prodM1:r.prodM1, prodM2:r.prodM2,
-      skuClass:r.skuClass, currentStock:r.currentStock,
-      drr:r.drr, doi:r.doi,
-      lineCap:r.lineCap, minCap:r.minCap, maxCap:r.maxCap,
-      priority:r.doiPriority||r.priority, segment:r.segment||'',
-      rmDoc:r.rmDoc, pmDoc:r.pmDoc, volatility:r.volatility||'',
-      rmStock:r.rmStock, pmStock:r.pmStock,
-    }));
-    const res=await fetch('/api/sheet',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ manufacturer:currentCm, skus }),
+    const [skuCsv,rmCsv,pmCsv,drrCsv] = await Promise.all([
+      gvizFetch(GS_TABS.skuMaster), gvizFetch(GS_TABS.rmBom),
+      gvizFetch(GS_TABS.pmBom),     gvizFetch(GS_TABS.drr)
+    ]);
+    const skuRows=parseCsv(skuCsv), rmRows=parseCsv(rmCsv),
+          pmRows=parseCsv(pmCsv),   drrRows=parseCsv(drrCsv);
+
+    const skuMap={};
+    skuRows.forEach(r=>{
+      const code=r['SKU Code']||r['sku_code']||r['SKU']||'';
+      if(code) skuMap[code]={
+        name:r['SKU Name']||r['sku_name']||r['Name']||code,
+        packSize:n(r['Pack Size']||r['Pack Size (g)']||r['pack_size']||0)
+      };
     });
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data=await res.json();
-    const ts=new Date().toLocaleTimeString();
-    setSyncStatus(`Saved ${data.updated||0} updated + ${data.added||0} new rows · ${ts}`, 'ok');
-    btn.textContent='✓ Saved';
-  } catch(e){
-    console.error('Save failed:', e);
-    setSyncStatus('Save failed: '+e.message, 'err');
-    btn.textContent='✗ Error';
+
+    const drrMap={};
+    drrRows.forEach(r=>{
+      const code=r['SKU Code']||r['sku_code']||r['SKU']||'';
+      const drr=n(r['DRR']||r['drr']||r['Daily Run Rate']||0);
+      if(code) drrMap[code]=drr;
+    });
+
+    // RM BOM: sum all RM kg-per-unit for each SKU
+    const rmBomMap={};
+    rmRows.forEach(r=>{
+      const code=r['SKU Code']||r['SKU']||'';
+      if(!code) return;
+      let qty=n(r['Qty Per Unit']||r['qty_per_unit']||r['RM Qty (kg/unit)']||0);
+      if(!qty){
+        const pct=n(r['RM % IN FG']||r['RM%']||0);
+        const pkKg=n(r['Pack Size (g)']||r['Pack Size']||(skuMap[code]?.packSize||0))/1000;
+        qty=pct*pkKg;
+      }
+      rmBomMap[code]=(rmBomMap[code]||0)+qty;
+    });
+
+    // PM BOM: sum all PM units-per-unit for each SKU
+    const pmBomMap={};
+    pmRows.forEach(r=>{
+      const code=r['SKU Code']||r['SKU']||'';
+      if(!code) return;
+      const qty=n(r['Qty Per Unit']||r['qty_per_unit']||r['PM Qty']||1);
+      pmBomMap[code]=(pmBomMap[code]||0)+qty;
+    });
+
+    gsData={skuMap,drrMap,rmBomMap,pmBomMap};
+    setStatus(`MRP data loaded — ${Object.keys(skuMap).length} SKUs`,'ok');
+    document.getElementById('lastUpdated').textContent='Updated '+new Date().toLocaleTimeString();
+    recompute();
+  } catch(e) {
+    setStatus('Could not load GSheet: '+e.message+'. Upload stock file to continue.','warn');
+    recompute();
   }
-  setTimeout(()=>{ btn.textContent='💾 Save to Sheet'; btn.disabled=false; }, 2500);
 }
 
-document.getElementById('loadSheetBtn').addEventListener('click', loadFromSheet);
-document.getElementById('saveSheetBtn').addEventListener('click', saveToSheet);
-
-/* ============================================================================
-   ENGINE — identical to original
-   ============================================================================ */
-const PRIORITY_RANK = { P0:0, P1:1, P2:2, P3:3 };
-
-let REPLENISH_LEAD_TIME = 21;
-let TARGET_DOC_NORM     = 20;
-const STRATEGIC_WEIGHT = {
-  A: { P1: 1.0, P2: 1.2, P3: 1.5 },
-  B: { P1: 0.7, P2: 0.9, P3: 1.1 },
-  C: { P1: 0.4, P2: 0.5, P3: 0.6 },
-};
-
-function weekCount(cfg){ return Math.ceil(cfg.horizonDays / cfg.daysPerWeek); }
-
-function sharedLineCapacity(skus, cfg){
-  let cap = -Infinity;
-  for(const s of skus){ if(typeof s.dailyLineCapacity==='number' && isFinite(s.dailyLineCapacity)) cap=Math.max(cap, s.dailyLineCapacity); }
-  return cap===-Infinity ? cfg.dailyLineCapacity : cap;
-}
-
-function orderSkus(skus){
-  return [...skus].sort((a,b)=>{
-    if(b.score!==a.score) return b.score-a.score;
-    if(b.target!==a.target) return b.target-a.target;
-    return a.code<b.code?-1:a.code>b.code?1:0;
-  });
-}
-
-function rollUpToWeeks(perDay, cfg){
-  const weeks = weekCount(cfg);
-  const perWeek = new Array(weeks).fill(0);
-  for(let day=0; day<perDay.length; day++){
-    const w = Math.floor(day/cfg.daysPerWeek);
-    perWeek[w] = (perWeek[w]||0) + (perDay[day]||0);
-  }
-  return perWeek;
-}
-
-function scheduleMaxFill(ordered, cfg){
-  const { dailyLineCapacity, horizonDays } = cfg;
-  const perDay = ordered.map(()=> new Array(horizonDays).fill(0));
-  let day = 0, capLeft = dailyLineCapacity;
-
-  for(let i=0;i<ordered.length;i++){
-    const maxPerSkuPerDay = ordered[i].maxPerSkuPerDay ?? cfg.maxPerSkuPerDay;
-    const minRun = ordered[i].minRun ?? cfg.minRun;
-    let remaining = Math.max(0, ordered[i].target);
-    while(remaining>0 && day<horizonDays){
-      if(capLeft<=0){ day++; capLeft=dailyLineCapacity; continue; }
-      const allocatedToday = perDay[i][day];
-      if(allocatedToday===0 && capLeft<minRun){ day++; capLeft=dailyLineCapacity; continue; }
-      const skuRoom = maxPerSkuPerDay - allocatedToday;
-      if(skuRoom<=0){ day++; capLeft=dailyLineCapacity; continue; }
-      const alloc = Math.min(remaining, capLeft, skuRoom);
-      perDay[i][day] = allocatedToday + alloc;
-      remaining -= alloc; capLeft -= alloc;
-    }
-  }
-  return finalize(ordered, perDay, cfg);
-}
-
-function scheduleUniform(ordered, cfg){
-  const { dailyLineCapacity, horizonDays } = cfg;
-  const perDay = ordered.map(()=> new Array(horizonDays).fill(0));
-  const skuMax = ordered.map(s=> s.maxPerSkuPerDay ?? cfg.maxPerSkuPerDay);
-  const desiredPerDay = ordered.map((s,i)=> Math.min(skuMax[i], Math.ceil(Math.max(0,s.target)/horizonDays)));
-  const remaining = ordered.map(s=> Math.max(0,s.target));
-
-  for(let day=0; day<horizonDays; day++){
-    let capLeft = dailyLineCapacity;
-    for(let i=0;i<ordered.length && capLeft>0;i++){
-      if(remaining[i]<=0) continue;
-      const want = Math.min(desiredPerDay[i], remaining[i], capLeft, skuMax[i]);
-      if(want<=0) continue;
-      perDay[i][day] = want; remaining[i]-=want; capLeft-=want;
-    }
-  }
-  for(let day=0; day<horizonDays; day++){
-    let used=0; for(let i=0;i<ordered.length;i++) used+=perDay[i][day];
-    let capLeft = dailyLineCapacity - used;
-    for(let i=0;i<ordered.length && capLeft>0;i++){
-      if(remaining[i]<=0) continue;
-      const room = skuMax[i] - perDay[i][day];
-      const add = Math.min(remaining[i], capLeft, room);
-      if(add<=0) continue;
-      perDay[i][day]+=add; remaining[i]-=add; capLeft-=add;
-    }
-  }
-  return finalize(ordered, perDay, cfg);
-}
-
-function finalize(ordered, perDay, cfg){
-  return ordered.map((s,i)=>{
-    const dayArr = perDay[i];
-    const scheduled = dayArr.reduce((a,b)=>a+b,0);
-    const target = Math.max(0,s.target);
-    return { code:s.code, name:s.name, priority:s.priority, score:s.score||0, target,
-      perDay:dayArr, perWeek:rollUpToWeeks(dayArr,cfg), scheduled,
-      shortfall:Math.max(0, target-scheduled) };
-  });
-}
-
-function schedule(skus, cfg){
-  const warnings=[];
-  const blocked=[], active=[], inactive=[];
-  for(const s of skus){
-    if(s.blocked){
-      blocked.push(s);
-    } else if(Math.max(0,s.target)<=0){
-      const perDay=new Array(cfg.horizonDays).fill(0);
-      inactive.push({code:s.code,name:s.name,priority:s.priority,score:s.score||0,target:0,perDay,
-        perWeek:rollUpToWeeks(perDay,cfg),scheduled:0,shortfall:0});
-      warnings.push({code:'zero_target',skuCode:s.code,
-        message:`SKU ${s.code} has a non-positive target and is excluded from the schedule.`});
-    } else active.push(s);
-  }
-  const ecfg = { ...cfg, dailyLineCapacity: sharedLineCapacity(active, cfg) };
-  const totalDemand = active.reduce((a,s)=>a+Math.max(0,s.target),0);
-  const totalCapacity = ecfg.dailyLineCapacity*ecfg.horizonDays;
-  if(totalDemand>totalCapacity){
-    warnings.push({code:'capacity_exceeded',
-      message:`Total demand (${fmt(totalDemand)}) exceeds horizon capacity (${fmt(totalCapacity)}). Lower-priority SKUs will carry shortfall.`});
-  }
-  const ordered = orderSkus(active);
-  const scheduled = ecfg.mode==='uniform' ? scheduleUniform(ordered,ecfg) : scheduleMaxFill(ordered,ecfg);
-  for(const r of scheduled){
-    if(r.shortfall>0) warnings.push({code:'shortfall',skuCode:r.code,
-      message:`SKU ${r.code} has a shortfall of ${fmt(r.shortfall)} units that could not be scheduled within ${ecfg.horizonDays} days.`});
-  }
-  const allRows=[...scheduled,...inactive];
-  allRows.sort((a,b)=>{
-    if(b.score!==a.score) return (b.score||0)-(a.score||0);
-    if(b.target!==a.target) return b.target-a.target;
-    return a.code<b.code?-1:a.code>b.code?1:0;
-  });
-  const dayCapacityUsed=new Array(ecfg.horizonDays).fill(0);
-  for(const r of allRows) for(let d=0;d<ecfg.horizonDays;d++) dayCapacityUsed[d]+=r.perDay[d]||0;
-  return { skus:allRows, blockedSkus:blocked, dayCapacityUsed, weeks:weekCount(ecfg), config:ecfg, warnings };
-}
-
-/* ============================================================================
-   DERIVATIONS
-   ============================================================================ */
-function computePriority(doi){
-  const d = +doi || 0;
-  if(d < 15) return 'P0';
-  if(d < 21) return 'P1';
-  if(d <= 30) return 'P2';
-  return 'P3';
-}
-const TARGET_MULT = { P0:10, P1:15, P2:15, P3:10 };
-function computeTarget(r){
-  const mult = TARGET_MULT[r.priority] ?? 10;
-  return Math.max(0, Math.round((r.drr||0) * mult));
-}
-function tonnage(packSize, units){
-  return Math.round((((+packSize||0) * (+units||0)) / 1e6) * 1000) / 1000;
-}
-function numOrNull(v){
-  if(v===null||v===undefined||String(v).trim()==='') return null;
-  const n=parseFloat(String(v).replace(/,/g,'').trim());
-  return Number.isFinite(n)?n:null;
-}
-function extractPackSize(name){
-  const m = (name||'').match(/(\d+(?:\.\d+)?)\s*(kgs?|gms?|g)\b/i);
-  if(!m) return 0;
-  const val = parseFloat(m[1]);
-  const unit = m[2].toLowerCase();
-  return (unit==='kg'||unit==='kgs') ? Math.round(val*1000) : val;
-}
-function recompute(r){
-  r.doiPriority = computePriority(r.doi);
-  r.priority    = r.doiPriority;
-  r.target      = computeTarget(r);
-  r.tonM1       = tonnage(r.packSize, r.prodM1);
-  r.tonM2       = tonnage(r.packSize, r.prodM2);
-  r.supplyPlan  = +r.prodM1 || 0;
-  r.balance     = r.supplyPlan - r.target;
-  // Auto-compute rmDoc: prefer rmUnitsCov/DRR (BOM-based), else rmStock formula
-  if(r.rmUnitsCov!=null){
-    r.rmDoc=(r.drr>0)?Math.round(r.rmUnitsCov/r.drr*10)/10:null;
-  } else if(r.rmStock!=null){
-    r.rmDoc=(r.drr>0&&r.packSize>0)?Math.round((r.rmStock*1000)/(r.drr*r.packSize)*10)/10:null;
-  }
-  // Auto-compute pmDoc: prefer pmUnitsCov/DRR, else pmStock formula
-  if(r.pmUnitsCov!=null){
-    r.pmDoc=(r.drr>0)?Math.round(r.pmUnitsCov/r.drr*10)/10:null;
-  } else if(r.pmStock!=null){
-    r.pmDoc=(r.drr>0)?Math.round(r.pmStock/r.drr*10)/10:null;
-  }
-  const rmVal=r.rmDoc, pmVal=r.pmDoc;
-  const rmMiss=rmVal===null||rmVal===undefined;
-  const pmMiss=pmVal===null||pmVal===undefined;
-  if(rmMiss||pmMiss){
-    r.blocked=true;
-    r.blockReason='DATA MISSING: '+[rmMiss?'RM DOC':null,pmMiss?'PM DOC':null].filter(Boolean).join(', ');
-  } else if(+rmVal<REPLENISH_LEAD_TIME){
-    r.blocked=true; r.blockReason=`RM DOC ${rmVal}d < ${REPLENISH_LEAD_TIME}d lead time`;
-  } else if(+pmVal<REPLENISH_LEAD_TIME){
-    r.blocked=true; r.blockReason=`PM DOC ${pmVal}d < ${REPLENISH_LEAD_TIME}d lead time`;
-  } else { r.blocked=false; r.blockReason=''; }
-  r.fgDoc=(r.drr>0)?Math.round((r.currentStock/r.drr)*10)/10:null;
-  r.urgency=r.fgDoc!=null?1/r.fgDoc:0;
-  const vol=r.volatility||'P2';
-  r.volatilityDefault=!r.volatility;
-  const cls=(r.skuClass||'A').toUpperCase();
-  r.strategicWeight=STRATEGIC_WEIGHT[cls]?.[vol]??STRATEGIC_WEIGHT['A']['P2'];
-  r.rmConfidence=(!rmMiss&&!pmMiss)?Math.min(Math.min(+rmVal,+pmVal)/TARGET_DOC_NORM,1.0):0;
-  r.score=r.blocked?0:(r.urgency*r.strategicWeight*r.rmConfidence);
-}
-
-/* ============================================================================
-   UI
-   ============================================================================ */
-const $ = sel => document.querySelector(sel);
-const fmt = n => (n||0).toLocaleString('en-US');
-
-let state = new Map();
-let currentCm = DEFAULT_CM;
-const cmName = () => MANUFACTURERS[currentCm]?.name || currentCm;
-
-function showTab(id){
-  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.toggle('active', p.id===id));
-  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
-}
-document.querySelectorAll('.tabs button').forEach(b=> b.addEventListener('click', ()=> showTab(b.dataset.tab)));
-$('#goTab2Btn').addEventListener('click', ()=> showTab('tab2'));
-
-function readConfig(){
-  return {
-    dailyLineCapacity:+$('#cfgCap').value||0,
-    maxPerSkuPerDay:+$('#cfgMax').value||0,
-    minRun:+$('#cfgMin').value||0,
-    horizonDays:Math.max(1,+$('#cfgHorizon').value||1),
-    daysPerWeek:Math.max(1,+$('#cfgWeek').value||1),
-    mode:$('#cfgMode').value,
-  };
-}
-function capDefaults(){
-  return { lineCap:+$('#cfgCap').value||0, maxCap:+$('#cfgMax').value||0, minCap:+$('#cfgMin').value||0 };
-}
-
-/* ---- rendering ---- */
-function renderTab1(){
-  const filter = $('#t1Filter').value.trim().toLowerCase();
-  const body = $('#t1Body'); body.innerHTML='';
-  let shown=0;
-  let sumProdM1=0, sumTonM1=0, sumProdM2=0, sumTonM2=0;
-  for(const [code,row] of state){
-    if(filter && !code.toLowerCase().includes(filter) && !row.name.toLowerCase().includes(filter)) continue;
-    shown++;
-    sumProdM1 += +row.prodM1||0;
-    sumTonM1  += +row.tonM1||0;
-    sumProdM2 += +row.prodM2||0;
-    sumTonM2  += +row.tonM2||0;
-    const tr=document.createElement('tr');
-    tr.innerHTML =
-      `<td class="l code">${esc(code)}</td>`+
-      `<td class="l">${esc(row.name)}</td>`+
-      `<td><input data-k="packSize" data-c="${esc(code)}" type="number" value="${row.packSize}" min="0" step="10"></td>`+
-      `<td><input data-k="prodM1" data-c="${esc(code)}" type="number" value="${row.prodM1}" min="0" step="100"></td>`+
-      `<td><input data-calc="tonM1" data-c="${esc(code)}" type="number" value="${row.tonM1}" readonly tabindex="-1" class="calc" title="(pack size × M1) ÷ 10⁶"></td>`+
-      `<td><input data-k="prodM2" data-c="${esc(code)}" type="number" value="${row.prodM2}" min="0" step="100"></td>`+
-      `<td><input data-calc="tonM2" data-c="${esc(code)}" type="number" value="${row.tonM2}" readonly tabindex="-1" class="calc" title="(pack size × M2) ÷ 10⁶"></td>`;
-    body.appendChild(tr);
-  }
-  $('#t1Count').textContent = `${shown} / ${state.size} shown`;
-  const fmtTon = v => (Math.round(v*1000)/1000).toLocaleString('en-US',{minimumFractionDigits:3,maximumFractionDigits:3});
-  $('#t1Foot').innerHTML = `<tr class="tot-row">
-    <td class="l tot-lbl" colspan="3">Total · ${shown} SKU${shown===1?'':'s'}</td>
-    <td class="tot-val">${fmt(sumProdM1)}</td>
-    <td class="tot-val">${fmtTon(sumTonM1)}</td>
-    <td class="tot-val">${fmt(sumProdM2)}</td>
-    <td class="tot-val">${fmtTon(sumTonM2)}</td>
-  </tr>`;
-}
-
-function renderTab2(){
-  const filter = $('#t2Filter').value.trim().toLowerCase();
-  const body = $('#t2Body'); body.innerHTML='';
-  let shown=0;
-  for(const [code,row] of state){
-    if(filter && !code.toLowerCase().includes(filter) && !row.name.toLowerCase().includes(filter)) continue;
-    shown++;
-    const cls=c=>`<option value="${c}"${row.skuClass===c?' selected':''}>${c}</option>`;
-    const vlsOpts=['P1','P2','P3'].map(v=>`<option value="${v}"${(row.volatility||'')===v?' selected':''}>${v}</option>`).join('');
-    const fmtFg=v=>v!=null?v.toFixed(1):'—';
-    const tr=document.createElement('tr');
-    if(row.blocked) tr.classList.add('blocked-row');
-    tr.innerHTML =
-      `<td class="l code">${esc(code)}</td>`+
-      `<td class="l">${esc(row.name)}</td>`+
-      `<td class="l"><select data-k="skuClass" data-c="${esc(code)}">${cls('A')}${cls('B')}${cls('C')}</select></td>`+
-      `<td><input data-k="currentStock" data-c="${esc(code)}" type="number" value="${row.currentStock}" min="0" step="100"></td>`+
-      `<td><input data-k="drr" data-c="${esc(code)}" type="number" value="${row.drr}"></td>`+
-      `<td><input data-k="doi" data-c="${esc(code)}" type="number" value="${row.doi}"></td>`+
-      `<td class="num" data-calc="fgDoc" data-c="${esc(code)}">${fmtFg(row.fgDoc)}</td>`+
-      `<td class="l"><span class="pill ${row.doiPriority||row.priority}" data-calc="doiPriority" data-c="${esc(code)}">${row.doiPriority||row.priority}</span></td>`+
-      `<td><input data-k="rmStock" data-c="${esc(code)}" type="number" value="${row.rmStock!=null?row.rmStock:''}" min="0" step="0.1" placeholder="—" title="kg"></td>`+
-      `<td class="num calc" data-calc="rmDoc" data-c="${esc(code)}" title="RM Stock×1000÷(DRR×Pack Size)">${row.rmDoc!=null?row.rmDoc.toFixed(1):'—'}</td>`+
-      `<td><input data-k="pmStock" data-c="${esc(code)}" type="number" value="${row.pmStock!=null?row.pmStock:''}" min="0" step="1" placeholder="—" title="units"></td>`+
-      `<td class="num calc" data-calc="pmDoc" data-c="${esc(code)}" title="PM Stock÷DRR">${row.pmDoc!=null?row.pmDoc.toFixed(1):'—'}</td>`+
-      `<td class="l"><select data-k="volatility" data-c="${esc(code)}">${vlsOpts}</select>${row.volatilityDefault?'<span title="Defaulted P2" style="color:var(--warn);font-size:10px"> ⚠</span>':''}</td>`+
-      `<td class="num" data-calc="urgency" data-c="${esc(code)}">${row.urgency.toFixed(4)}</td>`+
-      `<td class="num" data-calc="strategicWeight" data-c="${esc(code)}">${row.strategicWeight.toFixed(2)}</td>`+
-      `<td class="num" data-calc="rmConfidence" data-c="${esc(code)}">${row.rmConfidence.toFixed(3)}</td>`+
-      `<td class="score-val" data-calc="score" data-c="${esc(code)}">${row.blocked?'<span style=color:var(--bad)>BLOCKED</span>':row.score.toFixed(4)}</td>`+
-      `<td><input data-k="lineCap" data-c="${esc(code)}" type="number" value="${row.lineCap}" min="0" step="500"></td>`+
-      `<td><input data-k="minCap" data-c="${esc(code)}" type="number" value="${row.minCap}" min="0" step="100"></td>`+
-      `<td><input data-k="maxCap" data-c="${esc(code)}" type="number" value="${row.maxCap}" min="0" step="500"></td>`+
-      `<td><input data-calc="target" data-c="${esc(code)}" type="number" value="${row.target}" readonly tabindex="-1" class="calc" title="Y = priority × DRR"></td>`+
-      `<td><input data-calc="supplyPlan" data-c="${esc(code)}" type="number" value="${row.supplyPlan}" readonly tabindex="-1" class="calc" title="X = Production Plan M1 (TAB-1)"></td>`+
-      `<td><input data-calc="balance" data-c="${esc(code)}" type="number" value="${row.balance}" readonly tabindex="-1" class="calc" title="X − Y"></td>`;
-    body.appendChild(tr);
-  }
-  $('#t2Count').textContent = `${shown} / ${state.size} shown`;
-  $('#cmTag').textContent = `${cmName()} · ${state.size} SKUs`;
-  for(const [code] of state) paintBalance(code);
-}
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-
-function renderInputs(){ renderTab1(); renderTab2(); }
-
-function updateCalc(code){
-  const row=state.get(code); if(!row) return;
-  document.querySelectorAll(`[data-calc][data-c="${cssAttr(code)}"]`).forEach(el=>{
-    const f=el.dataset.calc;
-    if(f==='doiPriority'||f==='priority'){ const p=row.doiPriority||row.priority; el.textContent=p; el.className='pill '+p; }
-    else if(f==='fgDoc')          { el.textContent=row.fgDoc!=null?row.fgDoc.toFixed(1):'—'; }
-    else if(f==='rmDoc')           { el.textContent=row.rmDoc!=null?row.rmDoc.toFixed(1):'—'; }
-    else if(f==='pmDoc')           { el.textContent=row.pmDoc!=null?row.pmDoc.toFixed(1):'—'; }
-    else if(f==='urgency')        { el.textContent=row.urgency.toFixed(4); }
-    else if(f==='strategicWeight'){ el.textContent=row.strategicWeight.toFixed(2); }
-    else if(f==='rmConfidence')   { el.textContent=row.rmConfidence.toFixed(3); }
-    else if(f==='score')          { el.innerHTML=row.blocked?'<span style=color:var(--bad)>BLOCKED</span>':row.score.toFixed(4); }
-    else if(el.tagName==='INPUT') { el.value=row[f]; }
-    else el.textContent=row[f];
-  });
-  const firstEl=document.querySelector(`[data-c="${cssAttr(code)}"]`);
-  if(firstEl){ const tr=firstEl.closest('tr'); if(tr) tr.classList.toggle('blocked-row',!!row.blocked); }
-  paintBalance(code);
-}
-function paintBalance(code){
-  const row=state.get(code); if(!row) return;
-  document.querySelectorAll(`[data-calc="balance"][data-c="${cssAttr(code)}"]`).forEach(el=>{
-    el.style.color = row.balance<0 ? 'var(--bad)' : 'var(--good)';
-  });
-}
-function cssAttr(s){ return String(s).replace(/(["\\])/g,'\\$1'); }
-
-function onEdit(el){
-  const c=el.dataset?.c, k=el.dataset?.k;
-  if(!c||!k) return;
-  const row=state.get(c); if(!row) return;
-  if(k==='volatility'||k==='skuClass'){ row[k]=el.value||null; }
-  else if(k==='rmStock'||k==='pmStock'){ row[k]=el.value.trim()===''?null:(+el.value); }
-  else { row[k]=+el.value||0; }
-  recompute(row);
-  updateCalc(c);
-}
-document.addEventListener('input', e=> onEdit(e.target));
-document.addEventListener('change', e=> { if(e.target.tagName==='SELECT') onEdit(e.target); });
-
-$('#t1Filter').addEventListener('input', renderTab1);
-$('#t2Filter').addEventListener('input', renderTab2);
-$('#zeroBtn').addEventListener('click', ()=>{ for(const r of state.values()){ r.drr=0; recompute(r); } renderTab2(); });
-
-/* ============================================================================
-   IMPORT — unchanged from original
-   ============================================================================ */
-const COLSPEC = {
-  packSize:     {names:['Pack Size','Packsize','Pack Size (g)','Pack Size Grams'], num:true},
-  prodM1:       {names:['Production Plan M1','Prod Plan M1','Production Plan  M1','Prod Plan M1 Units'], num:true},
-  prodM2:       {names:['Production Plan M2','Prod Plan M2'], num:true},
-  skuClass:     {names:['SKU Class','Class','Assign A/B/C'], num:false},
-  currentStock: {names:['Current Stock','Stock','Opening Stock','Supply','Supply Units'], num:true},
-  drr:          {names:['DRR'], num:true},
-  doi:          {names:['DOI'], num:true},
-  lineCap:      {names:['Line Cap','Line Capacity','Daily Line Capacity'], num:true},
-  minCap:       {names:['Min Cap','Min Run','Minimum Run'], num:true},
-  maxCap:       {names:['Max Cap','Max Per SKU/Day','Max Per SKU Per Day','Max Per Day'], num:true},
-  rmDoc:        {names:['RM DOC','RM Doc','Raw Material DOC','RM Days of Cover'], num:true},
-  pmDoc:        {names:['PM DOC','PM Doc','Packaging DOC','PM Days of Cover'], num:true},
-  volatility:   {names:['Volatility','Demand Volatility','Vol Tier'], num:false},
-  rmStock:      {names:['RM Stock','RM Stock (kg)','Raw Material Stock','RM Inventory'], num:true},
-  pmStock:      {names:['PM Stock','PM Stock (units)','Packaging Stock','PM Inventory'], num:true},
-  rmUnitsCov:   {names:['RM Units Coverable','RM Units Cov','RM Coverage Units'], num:true},
-  pmUnitsCov:   {names:['PM Units Coverable','PM Units Cov','PM Coverage Units'], num:true},
-};
-const norm = s => String(s).toLowerCase().replace(/[\s_]+/g,' ').trim();
-
-function applyImport(header, rows){
-  const findIdx=names=>{ const t=names.map(norm); return header.findIndex(h=>t.includes(norm(h))); };
-  const ci=findIdx(['SKU Code','SKU_Code','Code','Sku Code']);
-  if(ci<0) return {matched:0, unknown:[]};
-  const idxMap={}; for(const k in COLSPEC) idxMap[k]=findIdx(COLSPEC[k].names);
-  let matched=0; const unknown=[];
-  const num=v=>{ const n=+String(v??'').replace(/,/g,'').trim(); return Number.isFinite(n)?n:0; };
-  for(const r of rows){
-    const code=String(r[ci]??'').trim(); if(!code) continue;
-    const row=state.get(code); if(!row){ unknown.push(code); continue; }
-    matched++;
-    for(const k in COLSPEC){
-      const i=idxMap[k]; if(i<0) continue;
-      const raw=r[i]; if(raw===undefined) continue;
-      const s=String(raw).trim(); if(s==='') continue;
-      if(k==='rmDoc'||k==='pmDoc'||k==='rmStock'||k==='pmStock'||k==='rmUnitsCov'||k==='pmUnitsCov'){ row[k]=s===''?null:num(raw); }
-      else if(k==='volatility'){ row[k]=s||null; }
-      else { row[k]=COLSPEC[k].num?num(raw):s.toUpperCase(); }
-    }
-    recompute(row);
-  }
-  return {matched, unknown};
-}
-
-function csvCell(v){ const s=String(v??''); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }
-function downloadCSV(filename, rows){
-  const csv=rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
-function parseCSV(text){
-  const rows=[]; let row=[], cur='', q=false;
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
-    if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
-    else if(c==='"') q=true;
-    else if(c===','){ row.push(cur); cur=''; }
-    else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; }
-    else if(c==='\r'){ /* skip */ }
-    else cur+=c;
-  }
-  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
-  const nonEmpty=rows.filter(r=>r.some(c=>c.trim()!==''));
-  const header=nonEmpty.shift()||[];
-  return {header, rows:nonEmpty};
-}
-
-async function readXlsx(arrayBuffer){
-  const dv = new DataView(arrayBuffer);
-  const bytes = new Uint8Array(arrayBuffer);
-  let eocd=-1;
-  for(let i=bytes.length-22;i>=0;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
-  if(eocd<0) throw new Error('Not a valid .xlsx file (no end-of-central-directory record).');
-  const cdCount=dv.getUint16(eocd+10,true);
-  const cdOffset=dv.getUint32(eocd+16,true);
-  const entries={};
-  let p=cdOffset;
-  const td=new TextDecoder();
-  for(let n=0;n<cdCount;n++){
-    if(dv.getUint32(p,true)!==0x02014b50) break;
-    const method=dv.getUint16(p+10,true);
-    const compSize=dv.getUint32(p+20,true);
-    const nameLen=dv.getUint16(p+28,true);
-    const extraLen=dv.getUint16(p+30,true);
-    const commentLen=dv.getUint16(p+32,true);
-    const localOffset=dv.getUint32(p+42,true);
-    const name=td.decode(bytes.subarray(p+46,p+46+nameLen));
-    entries[name]={method,compSize,localOffset};
-    p+=46+nameLen+extraLen+commentLen;
-  }
-  async function extract(name){
-    const e=entries[name]; if(!e) return null;
-    const lp=e.localOffset;
-    if(dv.getUint32(lp,true)!==0x04034b50) throw new Error('Corrupt .xlsx (bad local header).');
-    const lNameLen=dv.getUint16(lp+26,true);
-    const lExtraLen=dv.getUint16(lp+28,true);
-    const start=lp+30+lNameLen+lExtraLen;
-    const comp=bytes.subarray(start, start+e.compSize);
-    if(e.method===0) return comp;
-    if(typeof DecompressionStream==='undefined') throw new Error('This browser cannot decompress .xlsx. Use CSV import instead.');
-    const ds=new DecompressionStream('deflate-raw');
-    const stream=new Response(comp).body.pipeThrough(ds);
-    return new Uint8Array(await new Response(stream).arrayBuffer());
-  }
-  return {entries, extract};
-}
-function colIdx(ref){ const m=/^([A-Z]+)/.exec(ref)[1]; let n=0; for(const ch of m) n=n*26+(ch.charCodeAt(0)-64); return n-1; }
-function parseSharedStrings(xml){
-  const doc=new DOMParser().parseFromString(xml,'application/xml');
-  const out=[];
-  for(const si of doc.getElementsByTagName('si')){
-    let s=''; for(const t of si.getElementsByTagName('t')) s+=t.textContent;
-    out.push(s);
-  }
-  return out;
-}
-function parseWorksheet(xml, strings){
-  const doc=new DOMParser().parseFromString(xml,'application/xml');
-  const rows=[];
-  for(const rowEl of doc.getElementsByTagName('row')){
-    const arr=[];
-    for(const c of rowEl.getElementsByTagName('c')){
-      const ref=c.getAttribute('r'); if(!ref) continue;
-      const ci=colIdx(ref);
-      const t=c.getAttribute('t');
-      const vEl=c.getElementsByTagName('v')[0];
-      const isEl=c.getElementsByTagName('is')[0];
-      let v='';
-      if(t==='s' && vEl) v=strings[+vEl.textContent]||'';
-      else if(t==='inlineStr' && isEl) v=isEl.textContent;
-      else if(vEl) v=vEl.textContent;
-      arr[ci]=v;
-    }
-    rows.push(arr);
-  }
-  return rows;
-}
-function findHeaderRow(rows){
-  const want=norm('SKU Code');
-  for(let i=0;i<rows.length;i++){
-    if(rows[i].some(c=>norm(c)===want || norm(c)==='code')) return i;
-  }
-  return -1;
-}
-async function importXlsxFile(file){
-  const zip=await readXlsx(await file.arrayBuffer());
-  const ssBytes=await zip.extract('xl/sharedStrings.xml');
-  const strings=ssBytes?parseSharedStrings(new TextDecoder().decode(ssBytes)):[];
-  const sheetNames=Object.keys(zip.entries).filter(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort();
-  let matched=0; const unknown=[]; let sheetsUsed=0;
-  for(const sn of sheetNames){
-    const rows=parseWorksheet(new TextDecoder().decode(await zip.extract(sn)), strings);
-    const hdr=findHeaderRow(rows);
-    if(hdr<0) continue;
-    sheetsUsed++;
-    const res=applyImport(rows[hdr], rows.slice(hdr+1));
-    matched+=res.matched; unknown.push(...res.unknown);
-  }
-  return {matched, unknown, sheetsUsed};
-}
-
-$('#importXlsxBtn').addEventListener('click', ()=> $('#xlsxFile').click());
-$('#xlsxFile').addEventListener('change', async e=>{
-  const file=e.target.files[0]; if(!file) return;
-  try{
-    const {matched,unknown,sheetsUsed}=await importXlsxFile(file);
-    renderInputs();
-    if(sheetsUsed===0) alert('No sheet with a "SKU Code" header was found in that workbook.');
-    else alert(`Imported ${matched} matching SKU(s) from ${sheetsUsed} sheet(s).`+(unknown.length?`\n${unknown.length} unknown code(s) ignored:\n`+unknown.slice(0,10).join('\n'):''));
-  }catch(err){ alert('Could not read .xlsx: '+err.message); }
-  e.target.value='';
-});
-
-function wireCsvImport(btnSel, fileSel, after){
-  $(btnSel).addEventListener('click', ()=> $(fileSel).click());
-  $(fileSel).addEventListener('change', async e=>{
-    const file=e.target.files[0]; if(!file) return;
-    const {header,rows}=parseCSV(await file.text());
-    const {matched,unknown}=applyImport(header, rows);
-    renderInputs();
-    alert(`Imported ${matched} matching SKU(s).`+(unknown.length?`\n${unknown.length} unknown code(s) ignored:\n`+unknown.slice(0,10).join('\n'):''));
-    e.target.value='';
-  });
-}
-wireCsvImport('#importCsv1Btn','#csv1File');
-wireCsvImport('#importCsv2Btn','#csv2File');
-
-$('#template1Btn').addEventListener('click', ()=>{
-  const header=['SKU Code','SKU Name','Pack Size','Production Plan M1','Production Plan M2'];
-  const rows=[...state.values()].map(r=>[r.code,r.name,r.packSize,r.prodM1,r.prodM2]);
-  downloadCSV(`${currentCm}_tab1_supply_planner.csv`,[header,...rows]);
-});
-$('#template2Btn').addEventListener('click', ()=>{
-  const header=['SKU Code','SKU Name','SKU Class','Current Stock','DRR','DOI','Prod Priority','Line Cap','Min Cap','Max Cap','Target Run QTY','Monthly supply plan','Balance to Go'];
-  const rows=[...state.values()].map(r=>[r.code,r.name,r.skuClass,r.currentStock,r.drr,r.doi,r.priority,r.lineCap,r.minCap,r.maxCap,r.target,r.supplyPlan,r.balance]);
-  downloadCSV(`${currentCm}_tab2_scheduler.csv`,[header,...rows]);
-});
-
-/* ============================================================================
-   RUN + RESULTS — unchanged from original
-   ============================================================================ */
-function renderEscalation(blockedSkus){
-  const sec=$('#escalSec'),list=$('#escalList');
-  if(!blockedSkus||!blockedSkus.length){ sec.style.display='none'; return; }
-  sec.style.display='';
-  list.innerHTML=blockedSkus.map(b=>
-    `<div class="esc-item"><span class="tag" style="background:rgba(211,59,74,.2);color:var(--bad)">BLOCKED</span><span class="code" style="font-size:12px">${esc(b.code)}</span><span style="color:var(--muted);font-size:12px">${esc(b.name)}</span><span style="margin-left:auto;color:var(--bad);font-size:12px">${esc(b.blockReason||'')}</span></div>`
-  ).join('');
-}
-
-$('#runBtn').addEventListener('click', run);
-function run(){
-  REPLENISH_LEAD_TIME=Math.max(0,+$('#cfgGate').value||21);
-  TARGET_DOC_NORM=Math.max(1,+$('#cfgDocNorm').value||20);
-  for(const r of state.values()) recompute(r);
-  renderTab2();
-  const cfg=readConfig();
-  const skus=[...state.values()].map(r=>({
-    code:r.code, name:r.name, priority:r.priority, score:r.score||0,
-    blocked:!!r.blocked, blockReason:r.blockReason||'',
-    target:r.target, dailyLineCapacity:r.lineCap, maxPerSkuPerDay:r.maxCap, minRun:r.minCap,
-  }));
-  const res=schedule(skus,cfg);
-  window.__lastResult=res;
-  renderSummary(res); renderWarnings(res); renderEscalation(res.blockedSkus); renderWeekly(res); renderDay(res); renderShortfalls(res);
-  requestAnimationFrame(()=> $('#weeklySec').scrollIntoView({behavior:'smooth', block:'start'}));
-}
-
-function renderSummary(res){
-  const sched=res.skus.reduce((a,r)=>a+r.scheduled,0);
-  const short=res.skus.reduce((a,r)=>a+r.shortfall,0);
-  const cap=res.config.dailyLineCapacity*res.config.horizonDays;
-  const active=res.skus.filter(r=>r.target>0).length;
-  $('#kpis').innerHTML=
-    kpi(active,'SKUs scheduled')+kpi(fmt(sched),'Units scheduled')+
-    kpi(fmt(short),'Units shortfall')+kpi(cap?Math.round(sched/cap*100)+'%':'–','Horizon utilisation')+
-    kpi(res.weeks,'Weeks')+kpi(res.config.mode,'Mode');
-  $('#summarySec').style.display='';
-}
-const kpi=(v,l)=>`<div class="kpi"><b class="num">${v}</b><span>${l}</span></div>`;
-
-function renderWarnings(res){
-  const sec=$('#warnSec');
-  if(!res.warnings.length){ sec.style.display='none'; return; }
-  sec.style.display='';
-  $('#warns').innerHTML=res.warnings.map(w=>
-    `<div class="warn-item"><span class="tag ${w.code}">${w.code.replace('_',' ')}</span><span>${esc(w.message)}</span></div>`).join('');
-}
-
-function priPill(p){ return `<span class="pill ${p}">${p}</span>`; }
-
-function renderWeekly(res){
-  const W=res.weeks;
-  let h='<thead><tr><th class="l">SKU Code</th><th class="l">SKU Name</th><th class="l">Pri</th>';
-  for(let w=0;w<W;w++) h+=`<th>W${w+1}</th>`;
-  h+='<th class="totcol">Total</th></tr></thead><tbody>';
-  for(const r of res.skus){
-    const tot=r.perWeek.reduce((a,b)=>a+b,0);
-    h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${esc(r.name)}</td><td class="l">${priPill(r.priority)}</td>`;
-    for(let w=0;w<W;w++) h+=`<td class="num">${r.perWeek[w]?fmt(r.perWeek[w]):'<span class=muted>–</span>'}</td>`;
-    h+=`<td class="num totcol">${fmt(tot)}</td></tr>`;
-  }
-  h+='</tbody>';
-  $('#weeklyTbl').innerHTML=h; $('#weeklySec').style.display='';
-}
-
-function renderDay(res){
-  const D=res.config.horizonDays, cap=res.config.dailyLineCapacity;
-  let h='<thead><tr><th class="l">SKU Code</th><th class="l">Pri</th>';
-  for(let d=0;d<D;d++) h+=`<th>D${d+1}</th>`;
-  h+='</tr></thead><tbody>';
-  for(const r of res.skus){
-    if(r.scheduled===0) continue;
-    h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${priPill(r.priority)}</td>`;
-    for(let d=0;d<D;d++){ const v=r.perDay[d]; h+=`<td class="day${v?'':' z'}">${v?fmt(v):'·'}</td>`; }
-    h+='</tr>';
-  }
-  h+=`<tr><td class="l muted">Line used</td><td></td>`;
-  for(let d=0;d<D;d++){
-    const u=res.dayCapacityUsed[d], pct=cap?Math.round(u/cap*100):0;
-    h+=`<td><div class="bar ${u>cap?'over':''}" title="${fmt(u)} / ${fmt(cap)} (${pct}%)"><i style="width:${Math.min(100,pct)}%"></i></div></td>`;
-  }
-  h+='</tr><tr><td class="l muted">Util %</td><td></td>';
-  for(let d=0;d<D;d++){ const pct=cap?Math.round(res.dayCapacityUsed[d]/cap*100):0; h+=`<td class="num muted">${pct}%</td>`; }
-  h+='</tr></tbody>';
-  $('#dayTbl').innerHTML=h; $('#daySec').style.display='';
-}
-
-function renderShortfalls(res){
-  const rows=res.skus.filter(r=>r.shortfall>0);
-  const sec=$('#shortSec');
-  let h='<thead><tr><th class="l">SKU Code</th><th class="l">SKU Name</th><th class="l">Pri</th><th>Target</th><th>Scheduled</th><th>Shortfall</th></tr></thead><tbody>';
-  if(!rows.length){ h+=`<tr><td class="l muted" colspan="6">No shortfalls — every target fit within the horizon.</td></tr>`; }
-  for(const r of rows) h+=`<tr><td class="l code">${esc(r.code)}</td><td class="l">${esc(r.name)}</td><td class="l">${priPill(r.priority)}</td><td class="num">${fmt(r.target)}</td><td class="num">${fmt(r.scheduled)}</td><td class="num" style="color:var(--bad)">${fmt(r.shortfall)}</td></tr>`;
-  h+='</tbody>';
-  $('#shortTbl').innerHTML=h; sec.style.display='';
-}
-
-$('#dlWeekly').addEventListener('click', ()=>{
-  const res=window.__lastResult; if(!res) return;
-  const header=['SKU Code','SKU Name','Priority',...Array.from({length:res.weeks},(_,i)=>'W'+(i+1)),'Total'];
-  const rows=res.skus.map(r=>[r.code,r.name,r.priority,...r.perWeek,r.perWeek.reduce((a,b)=>a+b,0)]);
-  downloadCSV(`${currentCm}_weekly_schedule.csv`,[header,...rows]);
-});
-$('#dlDay').addEventListener('click', ()=>{
-  const res=window.__lastResult; if(!res) return;
-  const D=res.config.horizonDays;
-  const header=['SKU Code','SKU Name','Priority',...Array.from({length:D},(_,i)=>'D'+(i+1))];
-  const rows=res.skus.map(r=>[r.code,r.name,r.priority,...r.perDay]);
-  rows.push([]); rows.push(['LINE USED','','',...res.dayCapacityUsed]);
-  downloadCSV(`${currentCm}_daywise_schedule.csv`,[header,...rows]);
-});
-
-/* ============================================================================
-   INIT
-   ============================================================================ */
-function clearResults(){
-  for(const id of ['summarySec','warnSec','escalSec','weeklySec','daySec','shortSec']) $('#'+id).style.display='none';
-  window.__lastResult=null;
-}
-
-/**
- * Load manufacturer. Uses live sheet data if available; otherwise shows blank rows
- * with just the SKU code and name (no dummy values).
- */
-function loadManufacturer(id){
-  currentCm = MANUFACTURERS[id] ? id : DEFAULT_CM;
-  const cm  = MANUFACTURERS[currentCm];
-  const d   = capDefaults();
-
-  if(cm.sheetData && cm.sheetData.length > 0){
-    // Populate state from Google Sheets data
-    state = new Map();
-    for(const sku of cm.sheetData){
-      const row = {
-        code: sku.code, name: sku.name,
-        packSize: sku.packSize || extractPackSize(sku.name),
-        prodM1: sku.prodM1 || 0, prodM2: sku.prodM2 || 0,
-        tonM1: 0, tonM2: 0,
-        skuClass: sku.skuClass || 'A',
-        currentStock: sku.currentStock || 0,
-        drr: sku.drr || 0, doi: sku.doi || 0,
-        priority: sku.priority || 'P3',
-        segment: sku.segment || '',
-        rmDoc: sku.rmDoc !== undefined ? sku.rmDoc : null,
-        pmDoc: sku.pmDoc !== undefined ? sku.pmDoc : null,
-        rmStock: sku.rmStock !== undefined ? sku.rmStock : null,
-        pmStock: sku.pmStock !== undefined ? sku.pmStock : null,
-        rmUnitsCov: sku.rmUnitsCov !== undefined ? sku.rmUnitsCov : null,
-        pmUnitsCov: sku.pmUnitsCov !== undefined ? sku.pmUnitsCov : null,
-        volatility: sku.volatility || null,
-        lineCap: sku.lineCap || d.lineCap,
-        minCap:  sku.minCap  || d.minCap,
-        maxCap:  sku.maxCap  || d.maxCap,
-        target: 0, supplyPlan: 0, balance: 0,
-      };
-      recompute(row);
-      if(sku.priority){ row.priority=sku.priority; row.target=computeTarget(row); row.balance=row.supplyPlan-row.target; }
-      if(sku.segment) row.segment=sku.segment;
-      state.set(sku.code, row);
-    }
+// ─── Stock upload ─────────────────────────────────────────────────────────────
+function importStock(input) {
+  const file=input.files[0]; if(!file) return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  const reader=new FileReader();
+  if(ext==='csv') {
+    reader.onload=e=>{processStockCsv(e.target.result);input.value='';};
+    reader.readAsText(file);
   } else {
-    // Fallback: show SKU list with all values at zero (no dummy data)
-    state = new Map(cm.skus.map(([code,name])=>{
-      const row = {
-        code, name,
-        packSize:extractPackSize(name), prodM1:0, prodM2:0, tonM1:0, tonM2:0,
-        skuClass:'A', currentStock:0, drr:0, doi:0, priority:'P3',
-        rmDoc:null, pmDoc:null, volatility:null,
-        rmStock:null, pmStock:null,
-        rmUnitsCov:null, pmUnitsCov:null,
-        lineCap: d.lineCap||10000, minCap: d.minCap||1000, maxCap: d.maxCap||10000,
-        target:0, supplyPlan:0, balance:0,
-      };
-      recompute(row);
-      return [code, row];
-    }));
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        processStockCsv(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]));
+      }catch(err){alert('Cannot read XLSX: '+err.message);}
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
   }
-
-  $('#t1Filter').value=''; $('#t2Filter').value='';
-  renderInputs();
-  clearResults();
+}
+function processStockCsv(text) {
+  stockData={};
+  parseCsv(text).forEach(r=>{
+    const code=(r['SKU Code']||r['SKU']||r['sku_code']||'').trim();
+    if(!code) return;
+    stockData[code]={
+      fgStock:n(r['FG Stock (units)']||r['FG Stock']||r['fg_stock']||0),
+      rmStock:n(r['RM Stock (kg)']   ||r['RM Stock']||r['rm_stock']||0),
+      pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
+    };
+  });
+  setStatus(`Stock loaded — ${Object.keys(stockData).length} SKUs`,'ok');
+  recompute();
 }
 
-function initManufacturers(){
-  const sel=$('#cmSelect');
-  sel.innerHTML=Object.entries(MANUFACTURERS).map(([id,cm])=>`<option value="${id}">${esc(cm.name)}</option>`).join('');
-  sel.value = MANUFACTURERS[currentCm] ? currentCm : DEFAULT_CM;
-  sel.addEventListener('change', e=> loadManufacturer(e.target.value));
+// ─── Core scoring ─────────────────────────────────────────────────────────────
+function computeRows() {
+  const targetDoc=n(document.getElementById('cfgTargetDoc').value)||60;
+  const codes=new Set([...Object.keys(JAS_CLASS),...Object.keys(stockData),...(gsData?Object.keys(gsData.drrMap):[])]);
+  const result=[];
+  codes.forEach(code=>{
+    const jas=JAS_CLASS[code]; if(!jas) return;
+    const sku=gsData?.skuMap[code]||{};
+    const drr=gsData?.drrMap[code]||0;
+    const rmReqPerUnit=gsData?.rmBomMap[code]||0;
+    const pmReqPerUnit=gsData?.pmBomMap[code]||0;
+    const stk=stockData[code]||{};
+    const fgStock=stk.fgStock??0, rmStock=stk.rmStock??0, pmStock=stk.pmStock??0;
+
+    const rmReq30=rmReqPerUnit*drr*30;
+    const pmReq30=pmReqPerUnit*drr*30;
+    const fgDoc=drr>0?fgStock/drr:null;
+    const rmDoc=rmReq30>0?rmStock/(rmReq30/30):null;
+    const pmDoc=pmReq30>0?pmStock/(pmReq30/30):null;
+
+    // Score components
+    const urgency=(fgDoc!=null&&fgDoc>0)?1/fgDoc:0;
+    const stratWt=jas.w;
+    const docVals=[rmDoc,pmDoc].filter(d=>d!==null);
+    const minDoc=docVals.length>0?Math.min(...docVals):null;
+    const rmConf=minDoc!==null?Math.min(1,minDoc/targetDoc):0;
+    const score=urgency*stratWt*rmConf;
+
+    result.push({code,name:sku.name||'',cls:jas.c,priority:jas.p,
+      fgStock,drr,fgDoc,urgency,stratWt,
+      rmStock,rmReq30,rmDoc,pmStock,pmReq30,pmDoc,rmConf,score});
+  });
+  result.sort((a,b)=>b.score-a.score);
+  return result;
 }
 
-// Bootstrap: init UI with fallback data, then fetch from the sheet
-initManufacturers();
-loadManufacturer(DEFAULT_CM);
-loadFromSheet(); // async — updates UI when complete
+function recompute(){rows=computeRows();renderScoreTable();renderSummaryCards();}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderScoreTable() {
+  const filter=document.getElementById('scoreFilter').value.toLowerCase();
+  const clsF=document.getElementById('cfgClass').value;
+  const priF=document.getElementById('cfgPriority').value;
+  const maxScore=rows.length?rows[0].score:1;
+
+  const filtered=rows.filter(r=>{
+    if(clsF&&r.cls!==clsF) return false;
+    if(priF&&r.priority!==priF) return false;
+    if(filter&&!r.code.toLowerCase().includes(filter)&&!r.name.toLowerCase().includes(filter)) return false;
+    return true;
+  });
+
+  const fmt=(v,d=1)=>v==null?'—':(+v).toFixed(d);
+  const fmtI=v=>v==null?'—':Math.round(v).toLocaleString();
+
+  const tbody=document.getElementById('scoreBody');
+  if(!filtered.length){
+    tbody.innerHTML='<tr><td colspan="18" class="empty"><h3>No matching rows</h3></td></tr>';return;
+  }
+  tbody.innerHTML=filtered.map((r,i)=>`
+    <tr>
+      <td style="color:#94a3b8">${i+1}</td>
+      <td style="font-family:monospace;font-size:11px">${r.code}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">—</span>'}</td>
+      <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
+      <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+      <td class="num">${fmtI(r.fgStock)}</td>
+      <td class="num">${fmt(r.drr,1)}</td>
+      <td class="num" style="color:${docColor(r.fgDoc)};font-weight:600">${fmt(r.fgDoc,1)}</td>
+      <td class="num">${fmt(r.urgency,4)}</td>
+      <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
+      <td class="num">${fmtI(r.rmStock)}</td>
+      <td class="num">${fmt(r.rmReq30,0)}</td>
+      <td class="num" style="color:${docColor(r.rmDoc)}">${fmt(r.rmDoc,1)}</td>
+      <td class="num">${fmtI(r.pmStock)}</td>
+      <td class="num">${fmt(r.pmReq30,0)}</td>
+      <td class="num" style="color:${docColor(r.pmDoc)}">${fmt(r.pmDoc,1)}</td>
+      <td class="num">${fmt(r.rmConf,2)}</td>
+      <td class="num">
+        <div class="score-bar">
+          <div class="bar" style="width:${Math.round((r.score/(maxScore||1))*70)}px;background:${scoreColor(r.score,maxScore)}"></div>
+          <span class="score-val">${fmt(r.score,4)}</span>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function docColor(d){
+  if(d==null) return '#94a3b8';
+  if(d<7)  return '#ef4444';
+  if(d<15) return '#f97316';
+  if(d<30) return '#eab308';
+  return '#22c55e';
+}
+function scoreColor(s,mx){
+  const r=mx>0?s/mx:0;
+  if(r>0.7) return '#ef4444';
+  if(r>0.4) return '#f97316';
+  if(r>0.2) return '#eab308';
+  return '#3b82f6';
+}
+
+function renderSummaryCards(){
+  const total=rows.length;
+  const urgent=rows.filter(r=>r.fgDoc!=null&&r.fgDoc<15).length;
+  const noData=rows.filter(r=>r.fgDoc==null).length;
+  const avgConf=total?rows.reduce((s,r)=>s+r.rmConf,0)/total:0;
+  document.getElementById('summaryCards').innerHTML=`
+    <div class="card"><h4>Total SKUs</h4><div class="val">${total}</div><div class="sub">in JAS class</div></div>
+    <div class="card"><h4>Urgent (FG DOC &lt;15d)</h4><div class="val" style="color:#ef4444">${urgent}</div><div class="sub">need immediate run</div></div>
+    <div class="card"><h4>Awaiting Stock Data</h4><div class="val" style="color:#94a3b8">${noData}</div><div class="sub">upload to score</div></div>
+    <div class="card"><h4>Avg RM Confidence</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
+}
+
+// ─── Production plan ──────────────────────────────────────────────────────────
+function runSchedule(){
+  const wks=parseInt(document.getElementById('cfgHorizon').value)||8;
+  const capKg=n(document.getElementById('cfgLineCap').value)||5000;
+  const tgDoc=n(document.getElementById('cfgTargetFgDoc').value)||30;
+
+  const plan=rows.filter(r=>r.drr>0||r.fgStock>0).map(r=>{
+    const tgStock=r.drr*tgDoc;
+    const toProdUnits=Math.max(0,tgStock-r.fgStock);
+    const pkKg=(gsData?.skuMap[r.code]?.packSize||0)/1000;
+    const toProdKg=toProdUnits*(pkKg||0.001);
+    return{...r,toProdUnits,toProdKg,weekAlloc:new Array(wks).fill(0)};
+  });
+
+  const weekCap=new Array(wks).fill(capKg);
+  plan.sort((a,b)=>b.score-a.score);
+  plan.forEach(p=>{
+    let rem=p.toProdKg;
+    for(let w=0;w<wks&&rem>0;w++){
+      const fit=Math.min(rem,weekCap[w]);
+      if(fit>0){p.weekAlloc[w]=fit;weekCap[w]-=fit;rem-=fit;}
+    }
+  });
+  schedPlan=plan;
+  renderPlanTable();
+  const sched=plan.filter(p=>p.weekAlloc.some(v=>v>0)).length;
+  document.getElementById('schedStatus').textContent=`Scheduled ${sched}/${plan.length} SKUs across ${wks} weeks`;
+}
+
+function renderPlanTable(){
+  const filter=document.getElementById('planFilter').value.toLowerCase();
+  const wks=schedPlan.length?schedPlan[0].weekAlloc.length:8;
+  document.getElementById('planHead').innerHTML=`<tr>
+    <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
+    <th class="num">Score</th><th class="num">Target (kg)</th>
+    ${Array.from({length:wks},(_,i)=>`<th class="num">W${i+1}</th>`).join('')}
+    <th class="num">Scheduled (kg)</th>
+  </tr>`;
+
+  const filtered=schedPlan.filter(r=>!filter||r.code.toLowerCase().includes(filter)||r.name.toLowerCase().includes(filter));
+  const tbody=document.getElementById('planBody');
+  if(!filtered.length){
+    tbody.innerHTML='<tr><td colspan="20" class="empty"><h3>Click "Run Schedule"</h3></td></tr>';return;
+  }
+  tbody.innerHTML=filtered.map((r,i)=>{
+    const tot=r.weekAlloc.reduce((s,v)=>s+v,0);
+    return`<tr>
+      <td style="color:#94a3b8">${i+1}</td>
+      <td style="font-family:monospace;font-size:11px">${r.code}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'—'}</td>
+      <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
+      <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+      <td class="num"><b>${r.score.toFixed(4)}</b></td>
+      <td class="num">${r.toProdKg.toFixed(0)}</td>
+      ${r.weekAlloc.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'—'}</td>`).join('')}
+      <td class="num"><b>${tot.toFixed(0)}</b></td>
+    </tr>`;
+  }).join('');
+
+  const weekTots=Array.from({length:wks},(_,w)=>filtered.reduce((s,r)=>s+r.weekAlloc[w],0));
+  document.getElementById('planSummary').innerHTML=`
+    <div class="card"><h4>SKUs to Produce</h4><div class="val">${filtered.filter(r=>r.weekAlloc.some(v=>v>0)).length}</div></div>
+    <div class="card"><h4>Total Target (kg)</h4><div class="val">${filtered.reduce((s,r)=>s+r.toProdKg,0).toFixed(0)}</div></div>
+    <div class="card"><h4>Scheduled (kg)</h4><div class="val">${filtered.reduce((s,r)=>s+r.weekAlloc.reduce((a,b)=>a+b,0),0).toFixed(0)}</div></div>
+    <div class="card"><h4>Peak Week (kg)</h4><div class="val">${weekTots.length?Math.max(...weekTots).toFixed(0):'0'}</div></div>`;
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+function setStatus(msg,state){
+  document.getElementById('statusText').textContent=msg;
+  const d=document.getElementById('gsDot');
+  d.className='status-dot'+(state==='ok'?' ok':state==='warn'?' warn':'');
+}
+function downloadCSV(){
+  const hdr=['Rank','SKU Code','SKU Name','Class','Priority','FG Stock','DRR','FG DOC',
+    'Urgency','Str.Wt','RM Stock (kg)','RM Req (kg/30d)','RM DOC',
+    'PM Stock','PM Req (/30d)','PM DOC','RM Confidence','Score'];
+  const f=(v,d=4)=>v==null?'':(+v).toFixed(d);
+  const lines=[hdr.join(',')];
+  rows.forEach((r,i)=>lines.push([
+    i+1,`"${r.code}"`,`"${r.name}"`,r.cls,r.priority,
+    r.fgStock,f(r.drr,2),f(r.fgDoc,1),f(r.urgency,4),r.stratWt,
+    r.rmStock,f(r.rmReq30,2),f(r.rmDoc,1),
+    r.pmStock,f(r.pmReq30,2),f(r.pmDoc,1),f(r.rmConf,4),f(r.score,4)
+  ].join(',')));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+  a.download='production_priority_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+function downloadTemplate(){
+  const csv='SKU Code,FG Stock (units),RM Stock (kg),PM Stock (units)\n'+
+    Object.keys(JAS_CLASS).slice(0,5).map(c=>c+',0,0,0').join('\n')+'\n';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='stock_upload_template.csv';a.click();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.getElementById('cfgTargetDoc').addEventListener('change',recompute);
+rows=computeRows();
+renderSummaryCards();
+loadGSheet();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>
