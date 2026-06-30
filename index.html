@@ -405,7 +405,7 @@ function processStockCsv(text) {
     const code=(r['SKU Code']||r['SKU']||r['sku_code']||'').trim();
     if(!code) return;
     stockData[code]={
-      fgStock:n(r['FG Stock (units)']||r['FG Stock']||r['fg_stock']||0),
+          const fgStock = stk.fgStock ?? (gsData?.skuMap[code]?.stock || STATIC_FG_STOCK[code] || 0);
       rmStock:n(r['RM Stock (kg)']   ||r['RM Stock']||r['rm_stock']||0),
       pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
     };
@@ -437,7 +437,7 @@ function computeRows() {
 
     // FG stock from manual upload
     const stk = stockData[code] || {};
-    const fgStock = stk.fgStock ?? gsData?.skuMap[code]?.stock ?? STATIC_FG_STOCK[code] ?? 0;
+    const fgStock = stk.fgStock ?? 0;
     const fgDoc   = drr > 0 ? fgStock / drr : null;
 
     // -- RM DOC: per-material bottleneck using live MRP stock --
