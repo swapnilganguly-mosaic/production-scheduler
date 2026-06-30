@@ -28,7 +28,7 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.5px}
 .cfg-group{display:flex;align-items:center;gap:6px;font-size:12px}
 .cfg-group label{color:#64748b;white-space:nowrap}
 .cfg-group input,.cfg-group select{border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;font-size:12px;width:90px;color:#1a1a2e}
-.tab-content{display:none;padding:16px 20py}
+.tab-content{display:none;padding:16px 20px}
 .tab-content.active{display:block}
 .filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .filter-bar input{border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;width:260px}
@@ -319,7 +319,7 @@ async function loadGSheet() {
       const code=r['SKU Code']||r['sku_code']||r['SKU']||'';
       if(code) skuMap[code]={
         name:r['SKU Name']||r['sku_name']||r['Name']||code,
-        packSize:n(r['Pack Size']]||r['pack_size']||r['Pack Size (g)']||0)
+        packSize:n(r['Pack Size']||r['Pack Size (g)']||r['pack_size']||0)
       };
     });
 
@@ -336,7 +336,7 @@ async function loadGSheet() {
       if(!code) return;
       let qty=n(r['Qty Per Unit']||r['qty_per_unit']||r['RM Qty (kg/unit)']||0);
       if(!qty){
-        const pct=n(r['RM % IN FG']||r['RM%"||0);
+        const pct=n(r['RM % IN FG']||r['RM%']||0);
         const pkKg=n(r['Pack Size (g)']||r['Pack Size']||(skuMap[code]?.packSize||0))/1000;
         qty=pct*pkKg;
       }
