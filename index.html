@@ -336,8 +336,8 @@ async function loadGSheet() {
     skuRows.forEach(r=>{
       const code=r['SKU Code']||r['sku_code']||r['SKU']||'';
       if(code) skuMap[code]={
-        name:r['SKU Name']||r['sku_name']||r['Name']||code,
-        packSize:n(r['Pack Size']||r['Pack Size (g)']||r['pack_size']||0),
+        name:r['SKU Name']||r['sku_name']||r['fg_name']||r['Name']||code,
+        packSize:n(r['Pack Size']||r['Pack Size (g)']||r['pack_size']||r['pack_size_g']||0),
         stock:n(r['Current Stock']||r['current_stock']||r['FG Stock']||0)
       };
     });
