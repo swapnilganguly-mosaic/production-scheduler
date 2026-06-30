@@ -257,6 +257,24 @@ const DRR_DATA = {
   'MWMMNTP.6356.AAAABO_N':0.0
 };
 
+// FG Stock as of 2026-06-30 (from uploaded Excel)
+const STATIC_FG_STOCK = {
+  'MWLJNTP.0003.B0_N':229269,'MWLJNTP.00027.B0_N':33639,'MWLJNTP.00122.B0_N':39295,
+  'MWLJNTP.00034.B0_N':25391,'MWLJNTP.00507.B0_N':19330,'MWLJNTS.0001.B0_N':62519,
+  'MWLJNTS.0003.B0_N':0,'MWLJNTP.00699.B0_N':3518,'MWLJNTP.000709.B0_N':9191,
+  'MWLJNTP.00551.BO_N':1183,'MWLJNTP.00059.B0_N':46180,'MWLJNTP.00423.B0_N':3413,
+  'MWLJNTP.00616.BO_N':0,'MWLJNTP.00500.B0_N':4105,'MWLJNTS.0006.BO_N':23741,
+  'MWLJNTP.00617.BO_N':2062,'MWLJNTP.00698.B0_N':18451,'MWLJNTP.00609.BO_N':1398,
+  'MWLJNTP.00177.B0_N':7037,'MWLJNTP.00636.B0_N':16227,'MWLJNTP.00608.BO_N':0,
+  'MWLJNTP.00610.BO_N':0,'MWLJNTP.00586.BO_N':276,'MWLJNTP.00126.B0_N':12568,
+  'MWLJNTP.00664.BO_N':4918,'MWLJNTP.00541.BO_N':4231,'MWLJNTP.00339.B0_N':4298,
+  'MWLJNTP.00553.BO_N':10424,'MWLJNTP.00483.B0_N':17835,'MWLJNTK.00367.B0_N':12037,
+  'MWLJNTP.000836.B0_N':764,'MWLJNTP.00527.BO_N':1107,'MWLJNTP.00615.BO_N':3691,
+  'MWLJNTP.00618.BO_N':4722,'MWLJNTP.00481.B0_N':6052,'MWMMNTP.00207.AAAA.B0_N':24946,
+  'MWMMNTP.6369.AAAABO_N':16530,'MWLJNTP.00584.BO_N':6228,'MWMMNTP.0035.AAAABO_N':14394,
+  'MWMMNTP.00205.AAAA.B0_N':14054,'MWMMNTP.6348.AAAABO_N':217,'MWMMNTP.6356.AAAABO_N':6229,
+};
+
 const MRP_SHEET_ID = '1PDvEjSHOqrn902Y6vIpRvVwlkw3B5HpwP4w6_Stl58o';
 const GS_TABS = { skuMaster:'SKU Master', rmBom:'RM BOM', pmBom:'PM BOM', drr:'DRR' };
 
@@ -319,7 +337,8 @@ async function loadGSheet() {
       const code=r['SKU Code']||r['sku_code']||r['SKU']||'';
       if(code) skuMap[code]={
         name:r['SKU Name']||r['sku_name']||r['Name']||code,
-        packSize:n(r['Pack Size']||r['Pack Size (g)']||r['pack_size']||0)
+        packSize:n(r['Pack Size']||r['Pack Size (g)']||r['pack_size']||0),
+        stock:n(r['Current Stock']||r['current_stock']||r['FG Stock']||0)
       };
     });
 
@@ -386,7 +405,7 @@ function processStockCsv(text) {
     const code=(r['SKU Code']||r['SKU']||r['sku_code']||'').trim();
     if(!code) return;
     stockData[code]={
-      fgStock:n(r['FG Stock (units)']||r['FG Stock']||r['fg_stock']||0),
+          const fgStock = stk.fgStock ?? gsData?.skuMap[code]?.stock ?? STATIC_FG_STOCK[code] ?? 0;
       rmStock:n(r['RM Stock (kg)']   ||r['RM Stock']||r['rm_stock']||0),
       pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
     };
