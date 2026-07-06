@@ -76,6 +76,7 @@ tr:last-child td{border-bottom:none}
 <header>
   <h1>Production Scheduler</h1>
   <div class="tabs">
+    <button class="tab-btn" onclick="showTab('input',this)">1 · Input</button>
     <button class="tab-btn active" onclick="showTab('priority',this)">Priority Scoring</button>
     <button class="tab-btn" onclick="showTab('planning',this)">Production Plan</button>
   </div>
@@ -132,6 +133,30 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <!-- Priority Scoring Tab -->
+<!-- Input Tab -->
+<div id="tab-input" class="tab-content">
+  <div style="padding:10px 0 14px;color:#6b7280;font-size:13px">Enter production plan for M1 &amp; M2. <b>Tonnage (MT)</b> = (Pack size g × Units) ÷ 10⁶.</div>
+  <div class="tbl-wrap">
+    <table id="inputTable">
+      <thead><tr>
+        <th>SKU Code</th><th>SKU Name</th>
+        <th class="num">Pack Size (g)</th>
+        <th class="num">Prod Plan M1 (units)</th>
+        <th class="num">Tonnage M1 (MT)</th>
+        <th class="num">Prod Plan M2 (units)</th>
+        <th class="num">Tonnage M2 (MT)</th>
+      </tr></thead>
+      <tbody id="inputBody"></tbody>
+      <tfoot><tr>
+        <td colspan="3"><b>Total</b></td>
+        <td class="num" id="inputTotM1U">—</td>
+        <td class="num" id="inputTotM1T">—</td>
+        <td class="num" id="inputTotM2U">—</td>
+        <td class="num" id="inputTotM2T">—</td>
+      </tr></tfoot>
+    </table>
+  </div>
+</div>
 <div id="tab-priority" class="tab-content active">
   <div class="filter-bar">
     <input type="text" id="scoreFilter" placeholder="Filter by SKU code or name..." oninput="renderScoreTable()">
@@ -146,6 +171,7 @@ tr:last-child td{border-bottom:none}
         <th class="num">RM Stock (kg)</th><th class="num">RM Req (kg/30d)</th><th class="num">RM DOC</th>
         <th class="num">PM Stock</th><th class="num">PM Req (/30d)</th><th class="num">PM DOC</th>
         <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
+        <th class="num">M · Line Cap</th><th class="num">N · Min Cap</th><th class="num">O · Max Cap</th><th class="num">P · Target Run QTY</th><th class="num">Q · Monthly Plan</th><th class="num">R · Balance</th>
       </tr></thead>
       <tbody id="scoreBody"></tbody>
     </table>
@@ -283,6 +309,7 @@ let mrpData   = null;   // live from MRP Tool via postMessage
 let stockData = {};
 let rows      = [];
 let schedPlan = [];
+let inputPlan = {}, inputPlanM2 = {}, monthlyPlan = {}, lineCap = {}, minCap = {}, maxCap = {};
 
 // --- GSheet fetch ------------------------------------------------------------
 async function gvizFetch(tab) {
@@ -550,6 +577,12 @@ function renderScoreTable() {
           <span class="score-val">${fmt(r.score,4)}</span>
         </div>
       </td>
+      <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
+      <td class="num"><input type="number" min="0" step="500" value="${minCap[r.code]||1000}" data-code="${r.code}" onchange="minCap[this.dataset.code]=+this.value" style="width:55px"></td>
+      <td class="num"><input type="number" min="0" step="1000" value="${maxCap[r.code]||10000}" data-code="${r.code}" onchange="maxCap[this.dataset.code]=+this.value" style="width:60px"></td>
+      <td class="num">${r.priority==='P0'||r.priority==='P3'?fmt(r.drr*10,0):r.priority==='P1'||r.priority==='P2'?fmt(r.drr*15,0):'—'}</td>
+      <td class="num"><input type="number" min="0" step="100" value="${monthlyPlan[r.code]||''}" data-code="${r.code}" onchange="monthlyPlan[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
+      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0)<0?'#e53935':'#388e3c'">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0),0):'—'}</td>
     </tr>`).join('');
 }
 
@@ -653,6 +686,7 @@ function showTab(id,btn){
   document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
+  if (id === 'input') renderInputTab();
 }
 function setStatus(msg,state){
   document.getElementById('statusText').textContent=msg;
@@ -718,6 +752,38 @@ renderScoreTable();
 setStatus('Ready &mdash; upload stock file or click Refresh MRP Data','');
 loadGSheet();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+function renderInputTab() {
+  var tb = document.getElementById('inputBody');
+  if (!tb) return;
+  var items = rows.length > 0 ? rows : (gsData && gsData.skuMap ? Object.keys(gsData.skuMap).map(function(code) {
+    var sm = gsData.skuMap[code];
+    return {code: code, name: sm.name || code, packSizeKg: (sm.packSize || 0) / 1000};
+  }) : []);
+  var html = '', totM1u = 0, totM1t = 0, totM2u = 0, totM2t = 0;
+  items.forEach(function(r) {
+    var packG = Math.round(r.packSizeKg * 1000);
+    var m1 = +(inputPlan[r.code] || 0);
+    var m2 = +(inputPlanM2[r.code] || 0);
+    var t1 = packG * m1 / 1e6, t2 = packG * m2 / 1e6;
+    totM1u += m1; totM1t += t1; totM2u += m2; totM2t += t2;
+    html += '<tr>'
+      + '<td class="sku-code">' + r.code + '</td>'
+      + '<td>' + (r.name || r.code) + '</td>'
+      + '<td class="num">' + (packG || '—') + '</td>'
+      + '<td class="num"><input type="number" min="0" step="1000" value="' + (inputPlan[r.code] || '') + '" data-code="' + r.code + '" oninput="inputPlan[this.dataset.code]=this.value;renderInputTab()" style="width:80px"></td>'
+      + '<td class="num">' + (t1 > 0 ? t1.toFixed(4) : '—') + '</td>'
+      + '<td class="num"><input type="number" min="0" step="1000" value="' + (inputPlanM2[r.code] || '') + '" data-code="' + r.code + '" oninput="inputPlanM2[this.dataset.code]=this.value;renderInputTab()" style="width:80px"></td>'
+      + '<td class="num">' + (t2 > 0 ? t2.toFixed(4) : '—') + '</td>'
+      + '</tr>';
+  });
+  tb.innerHTML = html;
+  var e = function(id) { return document.getElementById(id); };
+  if (e('inputTotM1U')) e('inputTotM1U').textContent = totM1u > 0 ? totM1u.toLocaleString() : '—';
+  if (e('inputTotM1T')) e('inputTotM1T').textContent = totM1t > 0 ? totM1t.toFixed(4) : '—';
+  if (e('inputTotM2U')) e('inputTotM2U').textContent = totM2u > 0 ? totM2u.toLocaleString() : '—';
+  if (e('inputTotM2T')) e('inputTotM2T').textContent = totM2t > 0 ? totM2t.toFixed(4) : '—';
+}
+</script>
 </body>
 </html>
