@@ -582,7 +582,7 @@ function renderScoreTable() {
       <td class="num"><input type="number" min="0" step="1000" value="${maxCap[r.code]||10000}" data-code="${r.code}" onchange="maxCap[this.dataset.code]=+this.value" style="width:60px"></td>
       <td class="num">${r.priority==='P0'||r.priority==='P3'?fmt(r.drr*10,0):r.priority==='P1'||r.priority==='P2'?fmt(r.drr*15,0):'—'}</td>
       <td class="num"><input type="number" min="0" step="100" value="${monthlyPlan[r.code]||''}" data-code="${r.code}" onchange="monthlyPlan[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
-      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0)<0?'#e53935':'#388e3c'">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0),0):'—'}</td>
+      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0),0):'—'}</td>
     </tr>`).join('');
 }
 
