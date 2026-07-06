@@ -751,8 +751,7 @@ renderSummaryCards();
 renderScoreTable();
 setStatus('Ready &mdash; upload stock file or click Refresh MRP Data','');
 loadGSheet();
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
+
 function renderInputTab() {
   var tb = document.getElementById('inputBody');
   if (!tb) return;
@@ -784,6 +783,8 @@ function renderInputTab() {
   if (e('inputTotM2U')) e('inputTotM2U').textContent = totM2u > 0 ? totM2u.toLocaleString() : '—';
   if (e('inputTotM2T')) e('inputTotM2T').textContent = totM2t > 0 ? totM2t.toFixed(4) : '—';
 }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js">
 </script>
 </body>
 </html>
