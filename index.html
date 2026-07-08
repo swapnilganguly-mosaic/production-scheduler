@@ -168,9 +168,7 @@ tr:last-child td{border-bottom:none}
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
         <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
         <th class="num">Urgency</th><th class="num">Str.Wt</th>
-        <th class="num">RM Stock (kg)</th><th class="num">RM Req (kg/30d)</th><th class="num">RM DOC</th>
-        <th class="num">PM Stock</th><th class="num">PM Req (/30d)</th><th class="num">PM DOC</th>
-        <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
+                        <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
         <th class="num">M · Line Cap</th><th class="num">N · Min Cap</th><th class="num">O · Max Cap</th><th class="num">P · Target Run QTY</th><th class="num">Q · Monthly Plan</th><th class="num">R · Balance</th>
       </tr></thead>
       <tbody id="scoreBody"></tbody>
@@ -564,13 +562,7 @@ function renderScoreTable() {
       <td class="num" style="color:${docColor(r.fgDoc)};font-weight:600">${fmt(r.fgDoc,1)}</td>
       <td class="num">${fmt(r.urgency,4)}</td>
       <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
-      <td class="num">${fmtI(r.rmStock)}</td>
-      <td class="num">${fmt(r.rmReq30,0)}</td>
-      <td class="num" style="color:${docColor(r.rmDoc)}">${fmt(r.rmDoc,1)}</td>
-      <td class="num">${fmtI(r.pmStock)}</td>
-      <td class="num">${fmt(r.pmReq30,0)}</td>
-      <td class="num" style="color:${docColor(r.pmDoc)}">${fmt(r.pmDoc,1)}</td>
-      <td class="num">${fmt(r.rmConf,2)}</td>
+                                          <td class="num">${fmt(r.rmConf,2)}</td>
       <td class="num">
         <div class="score-bar">
           <div class="bar" style="width:${Math.round((r.score/(maxScore||1))*70)}px;background:${scoreColor(r.score,maxScore)}"></div>
