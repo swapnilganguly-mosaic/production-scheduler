@@ -90,9 +90,9 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <div class="import-bar">
-  <label>Stock Upload (FG / RM / PM):</label>
+  <label>Stock Upload (SIH / SIT / RM / PM):</label>
   <input type="file" id="stockFile" accept=".xlsx,.csv" onchange="importStock(this)">
-  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code . FG Stock (units) . RM Stock (kg) . PM Stock (units)</span>
+  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code . SIH (units) . SIT (units) . RM Stock (kg) . PM Stock (units) &mdash; FG Stock = SIH + SIT</span>
   <button class="btn secondary" onclick="downloadTemplate()">Download Template</button>
   <button class="btn green" onclick="loadGSheet()">&#8635; Refresh MRP Data</button>
 </div>
@@ -118,12 +118,12 @@ tr:last-child td{border-bottom:none}
      Score Formula &nbsp;<span id="formulaArrow">&#9654;</span>
   </div>
   <div class="formula-body" id="formulaBody">
-    <div class="formula-main">Score = Urgency x Strategic Weight x RM Confidence</div>
+    <div class="formula-main">Score = Urgency x Strategic Weight x Material Feasibility</div>
     <div class="formula-row"><b>Urgency</b> = 1 / FG DOC &nbsp;|&nbsp; <b>FG DOC</b> (days) = FG Stock (units) / DRR (units/day)</div>
-    <div class="formula-row"><b>RM Confidence</b> = min(RM DOC, PM DOC) / Target RM DOC &nbsp;[capped at 1]</div>
+    <div class="formula-row"><b>Material Feasibility</b> = min(RM DOC, PM DOC) / Target RM DOC &nbsp;[capped at 1]</div>
     <div class="formula-row"><b>RM DOC</b> = min over all RM materials of [ RM Stock (kg) / (RM% x Pack Size kg x DRR) ] &nbsp;&mdash; bottleneck material</div>
     <div class="formula-row"><b>PM DOC</b> = min over all PM materials of [ PM Stock (units) / (PM Qty/unit x DRR) ] &nbsp;&mdash; bottleneck material</div>
-    <div class="formula-row" style="margin-top:6px"><b>DRR</b> = Jun Units/day (embedded) &nbsp;|&nbsp; <b>RM/PM Stock</b> = live sync from MRP Tool &nbsp;|&nbsp; <b>FG Stock</b> = manual upload</div>
+    <div class="formula-row" style="margin-top:6px"><b>DRR</b> = Jun Units/day (embedded) &nbsp;|&nbsp; <b>RM/PM Stock</b> = live sync from MRP Tool &nbsp;|&nbsp; <b>FG Stock</b> = SIH + SIT (manual upload) &nbsp;|&nbsp; <b>Target Run QTY</b> = DRR x 13</div>
     <table class="formula-tbl" style="margin-top:10px">
       <tr><th>Class \ Priority</th><th>P1</th><th>P2</th><th>P3</th></tr>
       <tr><td><b>A</b></td><td>1.0</td><td>1.2</td><td>1.5</td></tr>
@@ -167,10 +167,11 @@ tr:last-child td{border-bottom:none}
     <table id="scoreTable">
       <thead><tr>
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
+        <th class="num">SIH</th><th class="num">SIT</th>
         <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
         <th class="num">Urgency</th><th class="num">Str.Wt</th>
                         <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
-                        <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
+                        <th class="num">Material Feasibility</th><th class="num">Score &#9660;</th>
         <th class="num">M · Line Cap</th><th class="num">N · Min Cap</th><th class="num">O · Max Cap</th><th class="num">P · Target Run QTY</th><th class="num">Q · Monthly Plan</th><th class="num">R · Balance</th>
       </tr></thead>
       <tbody id="scoreBody"></tbody>
@@ -431,8 +432,15 @@ function processStockCsv(text) {
   parseCsv(text).forEach(r=>{
     const code=(r['SKU Code']||r['SKU']||r['sku_code']||'').trim();
     if(!code) return;
+    const hasSih = 'SIH' in r || 'SIH (units)' in r || 'sih' in r;
+    const hasSit = 'SIT' in r || 'SIT (units)' in r || 'sit' in r;
+    const sih=n(r['SIH (units)']||r['SIH']||r['sih']||0);
+    const sit=n(r['SIT (units)']||r['SIT']||r['sit']||0);
     stockData[code]={
-      fgStock:n(r['FG Stock (units)']||r['FG Stock']||r['fg_stock']||0),
+      sih, sit,
+      // FG Stock = SIH + SIT whenever the file provides either column; otherwise fall back
+      // to a plain legacy FG Stock column so older upload files still work.
+      fgStock:(hasSih||hasSit) ? (sih+sit) : n(r['FG Stock (units)']||r['FG Stock']||r['fg_stock']||0),
       rmStock:n(r['RM Stock (kg)']   ||r['RM Stock']||r['rm_stock']||0),
       pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
     };
@@ -462,8 +470,10 @@ function computeRows() {
     const packSizeG  = mrpData?.packSizes[code] || gsData?.skuMap[code]?.packSize || 0;
     const packSizeKg = packSizeG / 1000;
 
-    // FG stock from manual upload
+    // FG stock from manual upload — FG Stock = SIH + SIT
     const stk = stockData[code] || {};
+    const sih = stk.sih ?? 0;
+    const sit = stk.sit ?? 0;
     const fgStock = stk.fgStock ?? (gsData?.skuMap[code]?.stock || STATIC_FG_STOCK[code] || 0);
     const fgDoc   = drr > 0 ? fgStock / drr : null;
 
@@ -511,7 +521,7 @@ function computeRows() {
       if (pmReq30Display > 0) pmDoc = pmStockUp / (pmReq30Display / 30);
     }
 
-    // Score = Urgency x Strategic Weight x RM Confidence
+    // Score = Urgency x Strategic Weight x Material Feasibility
     const urgency = (fgDoc != null && fgDoc > 0) ? 1 / fgDoc : 0;
     const stratWt = jas.w;
     const docVals = [rmDoc, pmDoc].filter(d => d !== null);
@@ -521,7 +531,7 @@ function computeRows() {
 
     result.push({
       code, name, cls: jas.c, priority: jas.p, packSizeKg,
-      fgStock, drr, fgDoc, urgency, stratWt,
+      sih, sit, fgStock, drr, fgDoc, urgency, stratWt,
       rmStock: rmStockDisplay, rmReq30: rmReq30Display, rmDoc,
       pmStock: pmStockDisplay, pmReq30: pmReq30Display, pmDoc,
       minDoc, rmConf, score
@@ -552,7 +562,7 @@ function renderScoreTable() {
 
   const tbody=document.getElementById('scoreBody');
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="19" class="empty"><h3>No matching rows</h3></td></tr>';return;
+    tbody.innerHTML='<tr><td colspan="21" class="empty"><h3>No matching rows</h3></td></tr>';return;
   }
   tbody.innerHTML=filtered.map((r,i)=>`
     <tr>
@@ -561,6 +571,8 @@ function renderScoreTable() {
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">&mdash;</span>'}</td>
       <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
       <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+      <td class="num">${fmtI(r.sih)}</td>
+      <td class="num">${fmtI(r.sit)}</td>
       <td class="num">${fmtI(r.fgStock)}</td>
       <td class="num">${fmt(r.drr,1)}</td>
       <td class="num" style="color:${docColor(r.fgDoc)};font-weight:600">${fmt(r.fgDoc,1)}</td>
@@ -577,9 +589,9 @@ function renderScoreTable() {
       <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
       <td class="num"><input type="number" min="0" step="500" value="${minCap[r.code]||1000}" data-code="${r.code}" onchange="minCap[this.dataset.code]=+this.value" style="width:55px"></td>
       <td class="num"><input type="number" min="0" step="1000" value="${maxCap[r.code]||10000}" data-code="${r.code}" onchange="maxCap[this.dataset.code]=+this.value" style="width:60px"></td>
-      <td class="num">${r.priority==='P0'||r.priority==='P3'?fmt(r.drr*10,0):r.priority==='P1'||r.priority==='P2'?fmt(r.drr*15,0):'—'}</td>
+      <td class="num">${fmt(r.drr*13,0)}</td>
       <td class="num"><input type="number" min="0" step="100" value="${monthlyPlan[r.code]||''}" data-code="${r.code}" onchange="monthlyPlan[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
-      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.priority==='P0'||r.priority==='P3'?r.drr*10:r.priority==='P1'||r.priority==='P2'?r.drr*15:0),0):'—'}</td>
+      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.drr*13)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.drr*13),0):'—'}</td>
     </tr>`).join('');
 }
 
@@ -607,7 +619,7 @@ function renderSummaryCards(){
     <div class="card"><h4>Total SKUs</h4><div class="val">${total}</div><div class="sub">in JAS class</div></div>
     <div class="card"><h4>Urgent (FG DOC &lt;15d)</h4><div class="val" style="color:#ef4444">${urgent}</div><div class="sub">need immediate run</div></div>
     <div class="card"><h4>Awaiting Stock Data</h4><div class="val" style="color:#94a3b8">${noData}</div><div class="sub">upload to score</div></div>
-    <div class="card"><h4>Avg RM Confidence</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
+    <div class="card"><h4>Avg Material Feasibility</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
 }
 
 // --- Production plan ----------------------------------------------------------
@@ -691,14 +703,14 @@ function setStatus(msg,state){
   d.className='status-dot'+(state==='ok'?' ok':state==='warn'?' warn':'');
 }
 function downloadCSV(){
-  const hdr=['Rank','SKU Code','SKU Name','Class','Priority','FG Stock','DRR','FG DOC',
+  const hdr=['Rank','SKU Code','SKU Name','Class','Priority','SIH','SIT','FG Stock','DRR','FG DOC',
     'Urgency','Str.Wt','RM Stock (kg)','RM Req (kg/30d)','RM DOC',
-    'PM Stock','PM Req (/30d)','PM DOC','RM Confidence','Score'];
+    'PM Stock','PM Req (/30d)','PM DOC','Material Feasibility','Score'];
   const f=(v,d=4)=>v==null?'':(+v).toFixed(d);
   const lines=[hdr.join(',')];
   rows.forEach((r,i)=>lines.push([
     i+1,`"${r.code}"`,`"${r.name}"`,r.cls,r.priority,
-    r.fgStock,f(r.drr,2),f(r.fgDoc,1),f(r.urgency,4),r.stratWt,
+    r.sih,r.sit,r.fgStock,f(r.drr,2),f(r.fgDoc,1),f(r.urgency,4),r.stratWt,
     r.rmStock,f(r.rmReq30,2),f(r.rmDoc,1),
     r.pmStock,f(r.pmReq30,2),f(r.pmDoc,1),f(r.rmConf,4),f(r.score,4)
   ].join(',')));
@@ -708,8 +720,8 @@ function downloadCSV(){
   a.click();
 }
 function downloadTemplate(){
-  const csv='SKU Code,FG Stock (units),RM Stock (kg),PM Stock (units)\n'+
-    Object.keys(JAS_CLASS).slice(0,5).map(c=>c+',0,0,0').join('\n')+'\n';
+  const csv='SKU Code,SIH (units),SIT (units),RM Stock (kg),PM Stock (units)\n'+
+    Object.keys(JAS_CLASS).slice(0,5).map(c=>c+',0,0,0,0').join('\n')+'\n';
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download='stock_upload_template.csv';a.click();
