@@ -137,6 +137,12 @@ tr:last-child td{border-bottom:none}
 <!-- Input Tab -->
 <div id="tab-input" class="tab-content">
   <div style="padding:10px 0 14px;color:#6b7280;font-size:13px">Enter production plan for M1 &amp; M2. <b>Tonnage (MT)</b> = (Pack size g × Units) ÷ 10⁶.</div>
+  <div class="import-bar">
+    <label>Import Production Plan:</label>
+    <input type="file" id="planFile" accept=".xlsx,.csv" onchange="importProductionPlan(this)">
+    <span style="font-size:11px;color:#94a3b8">Columns: SKU Code . Prod Plan M1 (units) . Prod Plan M2 (units)</span>
+    <button class="btn secondary" onclick="downloadPlanTemplate()">Download Template</button>
+  </div>
   <div class="tbl-wrap">
     <table id="inputTable">
       <thead><tr>
@@ -762,6 +768,60 @@ renderSummaryCards();
 renderScoreTable();
 setStatus('Ready &mdash; upload stock file or click Refresh MRP Data','');
 loadGSheet();
+
+// --- Production Plan import (Input tab) ----------------------------------------
+function importProductionPlan(input) {
+  const file = input.files[0]; if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+  if (ext === 'csv') {
+    reader.onload = e => { processInputPlanCsv(e.target.result); input.value = ''; };
+    reader.readAsText(file);
+  } else {
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' });
+        processInputPlanCsv(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]));
+      } catch (err) { alert('Cannot read XLSX: ' + err.message); }
+      input.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+function processInputPlanCsv(text) {
+  const lines = text.trim().split(/\r?\n/).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+  if (!lines.length) { alert('The file has no rows.'); return; }
+  const hdr = lines[0].map(h => (h || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const colCode = hdr.findIndex(h => h.includes('skucode') || h === 'sku' || h.includes('code'));
+  const colM1   = hdr.findIndex(h => h.includes('m1') || h.includes('month1'));
+  const colM2   = hdr.findIndex(h => h.includes('m2') || h.includes('month2'));
+  if (colCode < 0 || colM1 < 0) { alert('Cannot find columns.\nExpected: SKU Code, Prod Plan M1 (units), Prod Plan M2 (units)'); return; }
+  let loaded = 0; const unmatched = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const code = (row[colCode] || '').trim();
+    if (!code) continue;
+    const m1 = parseFloat((row[colM1] || '').toString().replace(/,/g, ''));
+    const m2 = colM2 >= 0 ? parseFloat((row[colM2] || '').toString().replace(/,/g, '')) : NaN;
+    if (isNaN(m1) && isNaN(m2)) continue;
+    if (!JAS_CLASS[code] && !(gsData && gsData.skuMap && gsData.skuMap[code]) && !(mrpData && mrpData.skuNames && mrpData.skuNames[code])) {
+      unmatched.push(code); continue;
+    }
+    if (!isNaN(m1)) inputPlan[code] = m1;
+    if (!isNaN(m2)) inputPlanM2[code] = m2;
+    loaded++;
+  }
+  if (!loaded) { alert('No valid rows found. Expected columns: SKU Code, Prod Plan M1 (units), Prod Plan M2 (units)'); return; }
+  renderInputTab();
+  setStatus(`Production plan loaded &mdash; ${loaded} SKU(s)` + (unmatched.length ? ` (${unmatched.length} unrecognized SKU code(s) skipped)` : ''), 'ok');
+}
+function downloadPlanTemplate() {
+  const csv = 'SKU Code,Prod Plan M1 (units),Prod Plan M2 (units)\n' +
+    Object.keys(JAS_CLASS).slice(0, 5).map(c => c + ',0,0').join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'production_plan_template.csv'; a.click();
+}
 
 function renderInputTab() {
   var tb = document.getElementById('inputBody');
