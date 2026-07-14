@@ -797,7 +797,10 @@ function knownSkuCodes() {
   return set;
 }
 function processInputPlanCsv(text) {
-  const rows = text.trim().split(/\r?\n/).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+  // Use the quote-aware CSV row parser (parseRow) instead of a naive split(',') — Excel
+  // exports thousands-formatted numbers as quoted fields like "169,000", and a naive comma
+  // split breaks those into two columns, shifting everything after it.
+  const rows = text.trim().split(/\r?\n/).map(l => parseRow(l).map(c => c.trim()));
   if (!rows.length) { alert('The file has no rows.'); return; }
   const known = knownSkuCodes();
   const width = rows.reduce((w, r) => Math.max(w, r.length), 0);
