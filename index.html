@@ -169,6 +169,7 @@ tr:last-child td{border-bottom:none}
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
         <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
         <th class="num">Urgency</th><th class="num">Str.Wt</th>
+                        <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
                         <th class="num">RM Conf</th><th class="num">Score &#9660;</th>
         <th class="num">M · Line Cap</th><th class="num">N · Min Cap</th><th class="num">O · Max Cap</th><th class="num">P · Target Run QTY</th><th class="num">Q · Monthly Plan</th><th class="num">R · Balance</th>
       </tr></thead>
@@ -521,7 +522,7 @@ function computeRows() {
       fgStock, drr, fgDoc, urgency, stratWt,
       rmStock: rmStockDisplay, rmReq30: rmReq30Display, rmDoc,
       pmStock: pmStockDisplay, pmReq30: pmReq30Display, pmDoc,
-      rmConf, score
+      minDoc, rmConf, score
     });
   });
   result.sort((a, b) => b.score - a.score);
@@ -549,7 +550,7 @@ function renderScoreTable() {
 
   const tbody=document.getElementById('scoreBody');
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="18" class="empty"><h3>No matching rows</h3></td></tr>';return;
+    tbody.innerHTML='<tr><td colspan="19" class="empty"><h3>No matching rows</h3></td></tr>';return;
   }
   tbody.innerHTML=filtered.map((r,i)=>`
     <tr>
@@ -563,6 +564,7 @@ function renderScoreTable() {
       <td class="num" style="color:${docColor(r.fgDoc)};font-weight:600">${fmt(r.fgDoc,1)}</td>
       <td class="num">${fmt(r.urgency,4)}</td>
       <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
+                                          <td class="num" style="color:${docColor(r.minDoc)};font-weight:600">${fmt(r.minDoc,1)}</td>
                                           <td class="num">${fmt(r.rmConf,2)}</td>
       <td class="num">
         <div class="score-bar">
