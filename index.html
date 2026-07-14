@@ -140,7 +140,7 @@ tr:last-child td{border-bottom:none}
   <div class="import-bar">
     <label>Import Production Plan:</label>
     <input type="file" id="planFile" accept=".xlsx,.csv" onchange="importProductionPlan(this)">
-    <span style="font-size:11px;color:#94a3b8">Columns: SKU Code . Prod Plan M1 (units) . Prod Plan M2 (units)</span>
+    <span style="font-size:11px;color:#94a3b8">Any layout works &mdash; auto-detects the SKU Code column and up to 2 quantity columns (M1, M2)</span>
     <button class="btn secondary" onclick="downloadPlanTemplate()">Download Template</button>
   </div>
   <div class="tbl-wrap">
@@ -788,30 +788,66 @@ function importProductionPlan(input) {
     reader.readAsArrayBuffer(file);
   }
 }
+// Known SKU codes the tool actually recognizes — used to auto-detect which column in an
+// arbitrary uploaded file is the SKU Code column, so the file's own layout/headers don't matter.
+function knownSkuCodes() {
+  const set = new Set(Object.keys(JAS_CLASS));
+  if (gsData && gsData.skuMap) Object.keys(gsData.skuMap).forEach(c => set.add(c));
+  if (mrpData && mrpData.skuNames) Object.keys(mrpData.skuNames).forEach(c => set.add(c));
+  return set;
+}
 function processInputPlanCsv(text) {
-  const lines = text.trim().split(/\r?\n/).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
-  if (!lines.length) { alert('The file has no rows.'); return; }
-  const hdr = lines[0].map(h => (h || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
-  const colCode = hdr.findIndex(h => h.includes('skucode') || h === 'sku' || h.includes('code'));
-  const colM1   = hdr.findIndex(h => h.includes('m1') || h.includes('month1'));
-  const colM2   = hdr.findIndex(h => h.includes('m2') || h.includes('month2'));
-  if (colCode < 0 || colM1 < 0) { alert('Cannot find columns.\nExpected: SKU Code, Prod Plan M1 (units), Prod Plan M2 (units)'); return; }
-  let loaded = 0; const unmatched = [];
-  for (let i = 1; i < lines.length; i++) {
-    const row = lines[i];
-    const code = (row[colCode] || '').trim();
-    if (!code) continue;
-    const m1 = parseFloat((row[colM1] || '').toString().replace(/,/g, ''));
-    const m2 = colM2 >= 0 ? parseFloat((row[colM2] || '').toString().replace(/,/g, '')) : NaN;
-    if (isNaN(m1) && isNaN(m2)) continue;
-    if (!JAS_CLASS[code] && !(gsData && gsData.skuMap && gsData.skuMap[code]) && !(mrpData && mrpData.skuNames && mrpData.skuNames[code])) {
-      unmatched.push(code); continue;
+  const rows = text.trim().split(/\r?\n/).map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()));
+  if (!rows.length) { alert('The file has no rows.'); return; }
+  const known = knownSkuCodes();
+  const width = rows.reduce((w, r) => Math.max(w, r.length), 0);
+
+  // SKU Code column: whichever column matches the most known SKU codes — works regardless
+  // of the file's own header text/column order.
+  let idCol = 0, idHits = -1;
+  for (let c = 0; c < width; c++) {
+    let hits = 0;
+    rows.forEach(r => { const v = (r[c] || '').trim(); if (v && known.has(v)) hits++; });
+    if (hits > idHits) { idHits = hits; idCol = c; }
+  }
+  if (idHits <= 0) { alert('Could not find a column matching any known SKU code in this file.'); return; }
+
+  // Quantity columns: prefer header keywords (m1/m2/month1/month2) if the file has them;
+  // otherwise just take the two columns (besides the ID column) with the most numeric cells —
+  // first = M1, second = M2. If only one numeric column exists, M2 is left blank.
+  const hdr = (rows[0] || []).map(h => (h || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+  let colM1 = hdr.findIndex((h, i) => i !== idCol && (h.includes('m1') || h.includes('month1')));
+  let colM2 = hdr.findIndex((h, i) => i !== idCol && (h.includes('m2') || h.includes('month2')));
+  if (colM1 === colM2) colM2 = -1;
+  const usedHeader = colM1 >= 0;
+  if (!usedHeader) {
+    const numHits = [];
+    for (let c = 0; c < width; c++) {
+      if (c === idCol) continue;
+      let hits = 0;
+      rows.forEach(r => { const v = (r[c] || '').trim(); if (v !== '' && isFinite(parseFloat(v.replace(/,/g, '')))) hits++; });
+      if (hits > 0) numHits.push({ c, hits });
     }
+    numHits.sort((a, b) => b.hits - a.hits);
+    colM1 = numHits[0] ? numHits[0].c : -1;
+    colM2 = numHits[1] ? numHits[1].c : -1;
+  }
+  if (colM1 < 0) { alert('Could not find a numeric column for the production plan quantity.'); return; }
+
+  let loaded = 0; const unmatched = [];
+  rows.forEach((r, i) => {
+    if (i === 0 && usedHeader) return; // skip the header row once we've actually keyed off its text
+    const code = (r[idCol] || '').trim();
+    if (!code) return;
+    const m1 = parseFloat((r[colM1] || '').toString().replace(/,/g, ''));
+    const m2 = colM2 >= 0 ? parseFloat((r[colM2] || '').toString().replace(/,/g, '')) : NaN;
+    if (isNaN(m1) && isNaN(m2)) return;
+    if (!known.has(code)) { unmatched.push(code); return; }
     if (!isNaN(m1)) inputPlan[code] = m1;
     if (!isNaN(m2)) inputPlanM2[code] = m2;
     loaded++;
-  }
-  if (!loaded) { alert('No valid rows found. Expected columns: SKU Code, Prod Plan M1 (units), Prod Plan M2 (units)'); return; }
+  });
+  if (!loaded) { alert('No rows matched a known SKU code with a numeric quantity.'); return; }
   renderInputTab();
   setStatus(`Production plan loaded &mdash; ${loaded} SKU(s)` + (unmatched.length ? ` (${unmatched.length} unrecognized SKU code(s) skipped)` : ''), 'ok');
 }
