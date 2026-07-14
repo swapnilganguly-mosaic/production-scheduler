@@ -169,7 +169,7 @@ tr:last-child td{border-bottom:none}
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
         <th class="num">SIH</th><th class="num">SIT</th>
         <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
-        <th class="num">Urgency</th><th class="num">Str.Wt</th>
+        <th class="num">Urgency</th><th class="num">Strategic Weight</th>
                         <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
                         <th class="num">Material Feasibility</th><th class="num">Score &#9660;</th>
         <th class="num">M · Line Cap</th><th class="num">N · Min Cap</th><th class="num">O · Max Cap</th><th class="num">P · Target Run QTY</th><th class="num">Q · Monthly Plan</th><th class="num">R · Balance</th>
@@ -704,7 +704,7 @@ function setStatus(msg,state){
 }
 function downloadCSV(){
   const hdr=['Rank','SKU Code','SKU Name','Class','Volatility','SIH','SIT','FG Stock','DRR','FG DOC',
-    'Urgency','Str.Wt','RM Stock (kg)','RM Req (kg/30d)','RM DOC',
+    'Urgency','Strategic Weight','RM Stock (kg)','RM Req (kg/30d)','RM DOC',
     'PM Stock','PM Req (/30d)','PM DOC','Material Feasibility','Score'];
   const f=(v,d=4)=>v==null?'':(+v).toFixed(d);
   const lines=[hdr.join(',')];
