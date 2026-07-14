@@ -473,8 +473,9 @@ function computeRows() {
     if (rmBomList && rmBomList.length > 0 && drr > 0 && packSizeKg > 0) {
       const matDocs = [];
       rmBomList.forEach(({key, pct}) => {
-        const matStock  = mrpData.rmStock[key] ?? 0;
-        const reqPerDay = pct * packSizeKg * drr;
+        const matStock   = mrpData.rmStock[key] ?? 0;
+        const overrideM1 = mrpData.rmReq ? mrpData.rmReq[key] : null;
+        const reqPerDay  = (overrideM1 != null && overrideM1 > 0) ? (overrideM1 / 30) : (pct * packSizeKg * drr);
         rmStockDisplay += matStock;
         rmReq30Display += reqPerDay * 30;
         if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
@@ -494,8 +495,9 @@ function computeRows() {
     if (pmBomList && pmBomList.length > 0 && drr > 0) {
       const matDocs = [];
       pmBomList.forEach(({key, qty}) => {
-        const matStock  = mrpData.pmStock[key] ?? 0;
-        const reqPerDay = qty * drr;
+        const matStock   = mrpData.pmStock[key] ?? 0;
+        const overrideM1 = mrpData.pmReq ? mrpData.pmReq[key] : null;
+        const reqPerDay  = (overrideM1 != null && overrideM1 > 0) ? (overrideM1 / 30) : (qty * drr);
         pmStockDisplay += matStock;
         pmReq30Display += reqPerDay * 30;
         if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
@@ -730,7 +732,9 @@ window.addEventListener('message', e => {
     rmStock:  e.data.rmStock  || {},
     pmStock:  e.data.pmStock  || {},
     rmBom:    e.data.rmBom    || {},
-    pmBom:    e.data.pmBom    || {}
+    pmBom:    e.data.pmBom    || {},
+    rmReq:    e.data.rmReq    || {},   // real imported Required Qty M1 per RM (kg), from MRP tool
+    pmReq:    e.data.pmReq    || {}    // real imported Required Qty M1 per PM (units), from MRP tool
   };
   const badge = document.getElementById('mrpSyncBadge');
   if (badge) badge.classList.add('visible');
