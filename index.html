@@ -105,7 +105,7 @@ tr:last-child td{border-bottom:none}
   <div class="cfg-group"><label>Filter Class:</label>
     <select id="cfgClass" onchange="recompute()"><option value="">All</option><option>A</option><option>B</option><option>C</option></select>
   </div>
-  <div class="cfg-group"><label>Filter Priority:</label>
+  <div class="cfg-group"><label>Filter Volatility:</label>
     <select id="cfgPriority" onchange="recompute()"><option value="">All</option><option>P1</option><option>P2</option><option>P3</option></select>
   </div>
   <button class="btn" onclick="recompute()">Recalculate</button>
@@ -166,7 +166,7 @@ tr:last-child td{border-bottom:none}
   <div class="tbl-wrap">
     <table id="scoreTable">
       <thead><tr>
-        <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
+        <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
         <th class="num">SIH</th><th class="num">SIT</th>
         <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
         <th class="num">Urgency</th><th class="num">Str.Wt</th>
@@ -655,7 +655,7 @@ function renderPlanTable(){
   const filter=document.getElementById('planFilter').value.toLowerCase();
   const wks=schedPlan.length?schedPlan[0].weekAlloc.length:8;
   document.getElementById('planHead').innerHTML=`<tr>
-    <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Priority</th>
+    <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
     <th class="num">Score</th><th class="num">Target (kg)</th>
     ${Array.from({length:wks},(_,i)=>`<th class="num">W${i+1}</th>`).join('')}
     <th class="num">Scheduled (kg)</th>
@@ -703,7 +703,7 @@ function setStatus(msg,state){
   d.className='status-dot'+(state==='ok'?' ok':state==='warn'?' warn':'');
 }
 function downloadCSV(){
-  const hdr=['Rank','SKU Code','SKU Name','Class','Priority','SIH','SIT','FG Stock','DRR','FG DOC',
+  const hdr=['Rank','SKU Code','SKU Name','Class','Volatility','SIH','SIT','FG Stock','DRR','FG DOC',
     'Urgency','Str.Wt','RM Stock (kg)','RM Req (kg/30d)','RM DOC',
     'PM Stock','PM Req (/30d)','PM DOC','Material Feasibility','Score'];
   const f=(v,d=4)=>v==null?'':(+v).toFixed(d);
