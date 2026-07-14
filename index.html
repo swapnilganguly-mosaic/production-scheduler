@@ -820,12 +820,16 @@ function processInputPlanCsv(text) {
   let colM2 = hdr.findIndex((h, i) => i !== idCol && (h.includes('m2') || h.includes('month2')));
   if (colM1 === colM2) colM2 = -1;
   const usedHeader = colM1 >= 0;
+  // Strict numeric test — the whole cell must be a number (with optional thousands commas /
+  // decimal), so a text column like SKU Name never gets mistaken for a quantity column just
+  // because parseFloat() leniently reads a leading digit out of a name like "2+ 350 gm".
+  const isNumericCell = v => v !== '' && /^-?[\d,]+(\.\d+)?$/.test(v.trim());
   if (!usedHeader) {
     const numHits = [];
     for (let c = 0; c < width; c++) {
       if (c === idCol) continue;
       let hits = 0;
-      rows.forEach(r => { const v = (r[c] || '').trim(); if (v !== '' && isFinite(parseFloat(v.replace(/,/g, '')))) hits++; });
+      rows.forEach(r => { if (isNumericCell((r[c] || '').trim())) hits++; });
       if (hits > 0) numHits.push({ c, hits });
     }
     numHits.sort((a, b) => b.hits - a.hits);
