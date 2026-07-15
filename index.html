@@ -90,9 +90,9 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <div class="import-bar">
-  <label>Stock Upload (SIH / SIT / RM / PM):</label>
+  <label>Stock Upload (SIH / SIT / RM / PM / DRR):</label>
   <input type="file" id="stockFile" accept=".xlsx,.csv" onchange="importStock(this)">
-  <span style="font-size:11px;color:#94a3b8">Columns: SKU Code . SIH (units) . SIT (units) . RM Stock (kg) . PM Stock (units) &mdash; FG Stock = SIH + SIT</span>
+  <span style="font-size:11px;color:#94a3b8">Any layout works &mdash; matched by SKU code. Optional columns: SIH, SIT, RM Stock, PM Stock, DRR. FG Stock = SIH + SIT</span>
   <button class="btn secondary" onclick="downloadTemplate()">Download Template</button>
   <button class="btn green" onclick="loadGSheet()">&#8635; Refresh MRP Data</button>
 </div>
@@ -507,8 +507,9 @@ function computeRows() {
   codes.forEach(code => {
     const jas = JAS_CLASS[code]; if (!jas) return;
 
-    // DRR: embedded data first, fallback to GSheet
-    const drr = (DRR_DATA[code] != null ? DRR_DATA[code] : null) ?? (gsData?.drrMap[code] ?? 0);
+    // DRR: uploaded override (matched by SKU code) first, then embedded data, then GSheet
+    const stkForDrr = stockData[code] || {};
+    const drr = (stkForDrr.drr != null ? stkForDrr.drr : null) ?? (DRR_DATA[code] != null ? DRR_DATA[code] : null) ?? (gsData?.drrMap[code] ?? 0);
 
     // SKU name: live MRP first, then GSheet, then code
     const name = mrpData?.skuNames[code] || gsData?.skuMap[code]?.name || '';
