@@ -433,25 +433,66 @@ function importStock(input) {
     reader.readAsArrayBuffer(file);
   }
 }
+// Column detection shared by the Stock Upload import: for each target field, prefer a
+// header-keyword match; if the header doesn't give a clean answer, fall back to picking
+// the numeric column with the most matches (excluding columns already claimed). The SKU
+// Code column itself is found by matching cell values against known SKU codes rather than
+// trusting a specific header label — so the file's own column names/order don't matter.
+function findColByKeywords(hdr, taken, keywords) {
+  for (let c = 0; c < hdr.length; c++) {
+    if (taken.has(c)) continue;
+    if (keywords.some(kw => hdr[c].includes(kw))) return c;
+  }
+  return -1;
+}
 function processStockCsv(text) {
-  stockData={};
-  parseCsv(text).forEach(r=>{
-    const code=(r['SKU Code']||r['SKU']||r['sku_code']||'').trim();
-    if(!code) return;
-    const hasSih = 'SIH' in r || 'SIH (units)' in r || 'sih' in r;
-    const hasSit = 'SIT' in r || 'SIT (units)' in r || 'sit' in r;
-    const sih=n(r['SIH (units)']||r['SIH']||r['sih']||0);
-    const sit=n(r['SIT (units)']||r['SIT']||r['sit']||0);
-    stockData[code]={
-      sih, sit,
+  stockData = {};
+  const rawRows = text.trim().split(/\r?\n/).map(l => parseRow(l).map(c => c.trim()));
+  if (!rawRows.length) { setStatus('The file has no rows.', 'warn'); return; }
+  const known = knownSkuCodes();
+  const width = rawRows.reduce((w, r) => Math.max(w, r.length), 0);
+
+  // SKU Code column: whichever column matches the most known SKU codes.
+  let idCol = 0, idHits = -1;
+  for (let c = 0; c < width; c++) {
+    let hits = 0;
+    rawRows.forEach(r => { const v = (r[c] || '').trim(); if (v && known.has(v)) hits++; });
+    if (hits > idHits) { idHits = hits; idCol = c; }
+  }
+  if (idHits <= 0) { setStatus('Could not find a column matching any known SKU code in this file.', 'warn'); return; }
+
+  const hdr = (rawRows[0] || []).map(h => (h || '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const taken = new Set([idCol]);
+  const claim = c => { if (c >= 0) taken.add(c); return c; };
+  const colSih = claim(findColByKeywords(hdr, taken, ['sih']));
+  const colSit = claim(findColByKeywords(hdr, taken, ['sit']));
+  const colFg  = claim(findColByKeywords(hdr, taken, ['fgstock', 'fg']));
+  const colDrr = claim(findColByKeywords(hdr, taken, ['drr']));
+  const colRm  = claim(findColByKeywords(hdr, taken, ['rmstock', 'rm']));
+  const colPm  = claim(findColByKeywords(hdr, taken, ['pmstock', 'pm']));
+  const usedHeader = colSih >= 0 || colSit >= 0 || colFg >= 0 || colDrr >= 0 || colRm >= 0 || colPm >= 0;
+
+  const numAt = (r, c) => { if (c < 0) return null; const v = (r[c] || '').replace(/,/g, '').trim(); return v !== '' && isFinite(parseFloat(v)) ? parseFloat(v) : null; };
+  let loaded = 0;
+  rawRows.forEach((r, i) => {
+    if (i === 0 && usedHeader) return; // skip the header row once we've keyed off its text
+    const code = (r[idCol] || '').trim();
+    if (!code || !known.has(code)) return;
+    const sih = numAt(r, colSih), sit = numAt(r, colSit);
+    const fgRaw = numAt(r, colFg);
+    const drr = numAt(r, colDrr);
+    stockData[code] = {
+      sih: sih || 0, sit: sit || 0,
       // FG Stock = SIH + SIT whenever the file provides either column; otherwise fall back
       // to a plain legacy FG Stock column so older upload files still work.
-      fgStock:(hasSih||hasSit) ? (sih+sit) : n(r['FG Stock (units)']||r['FG Stock']||r['fg_stock']||0),
-      rmStock:n(r['RM Stock (kg)']   ||r['RM Stock']||r['rm_stock']||0),
-      pmStock:n(r['PM Stock (units)']||r['PM Stock']||r['pm_stock']||0)
+      fgStock: (sih != null || sit != null) ? ((sih || 0) + (sit || 0)) : (fgRaw || 0),
+      rmStock: numAt(r, colRm) || 0,
+      pmStock: numAt(r, colPm) || 0,
+      drr: drr != null ? drr : undefined
     };
+    loaded++;
   });
-  setStatus(`Stock loaded &mdash; ${Object.keys(stockData).length} SKUs`,'ok');
+  setStatus(`Stock loaded &mdash; ${loaded} SKU(s) matched by SKU code`, 'ok');
   recompute();
 }
 
@@ -726,8 +767,8 @@ function downloadCSV(){
   a.click();
 }
 function downloadTemplate(){
-  const csv='SKU Code,SIH (units),SIT (units),RM Stock (kg),PM Stock (units)\n'+
-    Object.keys(JAS_CLASS).slice(0,5).map(c=>c+',0,0,0,0').join('\n')+'\n';
+  const csv='SKU Code,SIH (units),SIT (units),RM Stock (kg),PM Stock (units),DRR\n'+
+    Object.keys(JAS_CLASS).slice(0,5).map(c=>c+',0,0,0,0,0').join('\n')+'\n';
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download='stock_upload_template.csv';a.click();
