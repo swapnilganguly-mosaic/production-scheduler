@@ -102,6 +102,18 @@ tr:last-child td{border-bottom:none}
   <span style="font-size:11px;color:#94a3b8">Any layout works &mdash; matched by SKU code. Updates only SIH, SIT, DRR; RM/PM Stock already loaded is left untouched.</span>
   <button class="btn secondary" onclick="downloadSihSitDrrTemplate()">Download Template</button>
 </div>
+<div class="import-bar">
+  <label>DRR Import &mdash; bucket:</label>
+  <select id="drrBucketSelect">
+    <option value="actualM0">Actual &mdash; Current Month (M0)</option>
+    <option value="forecastM0">Forecast &mdash; Current Month (M0)</option>
+    <option value="forecastM1">Forecast &mdash; Month 1 (M1)</option>
+    <option value="forecastM2">Forecast &mdash; Month 2 (M2)</option>
+  </select>
+  <input type="file" id="drrFile" accept=".xlsx,.csv" onchange="importDrr(this)">
+  <span style="font-size:11px;color:#94a3b8">Any layout works &mdash; matched by SKU code. Loads into whichever bucket is selected above.</span>
+  <button class="btn secondary" onclick="downloadDrrTemplate()">Download Template</button>
+</div>
 
 <div class="config-panel">
   <div class="cfg-group"><label>Line Cap (kg/week):</label><input type="number" id="cfgLineCap" value="5000" min="0"></div>
@@ -180,14 +192,30 @@ tr:last-child td{border-bottom:none}
       <thead><tr>
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
         <th class="num">SIH</th><th class="num">SIT</th>
-        <th class="num">FG Stock</th><th class="num">DRR</th><th class="num">FG DOC</th>
-        <th class="num">Urgency</th><th class="num">Strategic Weight</th>
-                        <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
-                        <th class="num">Material Feasibility</th><th class="num">Score &#9660;</th>
-        <th class="num">M · Line Cap</th><th class="num">N · Min Cap</th><th class="num">O · Max Cap</th><th class="num">P · Target Run QTY</th><th class="num">Q · Monthly Plan</th><th class="num">R · Balance</th>
+        <th class="num">FG Stock</th><th class="num">Strategic Weight</th><th class="num">Target DOC</th>
+        <th class="num">DRR M1</th><th class="num">FG DOC M1</th><th class="num">Urgency M1</th>
+        <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
+        <th class="num">Material<br>Feasibility M1</th><th class="num">Score M1 &#9660;</th>
+        <th class="num">Run Qty M1</th><th class="num">Monthly Plan M1</th><th class="num">Balance M1</th>
+        <th class="num">DRR M2</th><th class="num">FG DOC M2</th><th class="num">Urgency M2</th>
+        <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M2</th>
+        <th class="num">Material<br>Feasibility M2</th><th class="num">Score M2</th>
+        <th class="num">Run Qty M2</th><th class="num">Monthly Plan M2</th><th class="num">Balance M2</th>
+        <th class="num">Line Cap</th>
       </tr></thead>
       <tbody id="scoreBody"></tbody>
     </table>
+  </div>
+
+  <div class="sched-controls" style="margin-top:16px">
+    <button class="btn" onclick="generateSchedule2Month()">Generate 2-Month Schedule (8 Weeks)</button>
+    <span style="font-size:12px;color:#64748b" id="sched2moStatus"></span>
+  </div>
+  <div class="tbl-wrap" id="sched2moWeekWrap" style="display:none;margin-top:10px">
+    <table id="sched2moWeekTable"><thead id="sched2moWeekHead"></thead><tbody id="sched2moWeekBody"></tbody></table>
+  </div>
+  <div class="tbl-wrap" id="sched2moDayWrap" style="display:none;margin-top:10px">
+    <table id="sched2moDayTable"><thead id="sched2moDayHead"></thead><tbody id="sched2moDayBody"></tbody></table>
   </div>
 </div>
 
@@ -322,7 +350,11 @@ let mrpData   = null;   // live from MRP Tool via postMessage
 let stockData = {};
 let rows      = [];
 let schedPlan = [];
-let inputPlan = {}, inputPlanM2 = {}, monthlyPlan = {}, lineCap = {}, minCap = {}, maxCap = {};
+let sched2mo  = null;   // generated 2-month week/day schedule (Priority Scoring tab)
+let inputPlan = {}, inputPlanM2 = {}, monthlyPlan = {}, monthlyPlanM2 = {}, lineCap = {};
+// DRR buckets: Actual/Forecast for the current month (M0), Forecast for M1 & M2 — each
+// populated independently via the DRR Import control (pick a bucket, then upload a file).
+let drrActualM0 = {}, drrForecastM0 = {}, drrForecastM1 = {}, drrForecastM2 = {};
 
 // --- GSheet fetch ------------------------------------------------------------
 async function gvizFetch(tab) {
@@ -584,15 +616,22 @@ function computeRows() {
   const targetDoc = n(document.getElementById('cfgTargetDoc').value) || 60;
   const codes = new Set([
     ...Object.keys(JAS_CLASS), ...Object.keys(stockData),
-    ...Object.keys(DRR_DATA),  ...(gsData ? Object.keys(gsData.drrMap) : [])
+    ...Object.keys(DRR_DATA),  ...(gsData ? Object.keys(gsData.drrMap) : []),
+    ...Object.keys(drrForecastM1), ...Object.keys(drrForecastM2)
   ]);
   const result = [];
   codes.forEach(code => {
     const jas = JAS_CLASS[code]; if (!jas) return;
 
-    // DRR: uploaded override (matched by SKU code) first, then embedded data, then GSheet
+    // DRR M1/M2: dedicated Forecast M1/M2 import first; if a SKU has no forecast for that
+    // month yet, fall back to whichever M0 bucket has data (Forecast M0, then Actual M0),
+    // then finally the legacy single-DRR sources (Stock Upload / SIH-SIT-DRR / embedded).
     const stkForDrr = stockData[code] || {};
-    const drr = (stkForDrr.drr != null ? stkForDrr.drr : null) ?? (DRR_DATA[code] != null ? DRR_DATA[code] : null) ?? (gsData?.drrMap[code] ?? 0);
+    const legacyDrr = (stkForDrr.drr != null ? stkForDrr.drr : null) ?? (DRR_DATA[code] != null ? DRR_DATA[code] : null) ?? (gsData?.drrMap[code] ?? 0);
+    const m0Baseline = (drrForecastM0[code] != null ? drrForecastM0[code] : null) ??
+                       (drrActualM0[code] != null ? drrActualM0[code] : null) ?? legacyDrr;
+    const drrM1 = (drrForecastM1[code] != null ? drrForecastM1[code] : null) ?? m0Baseline;
+    const drrM2 = (drrForecastM2[code] != null ? drrForecastM2[code] : null) ?? m0Baseline;
 
     // SKU name: live MRP first, then GSheet, then code
     const name = mrpData?.skuNames[code] || gsData?.skuMap[code]?.name || '';
@@ -601,85 +640,102 @@ function computeRows() {
     const packSizeG  = mrpData?.packSizes[code] || gsData?.skuMap[code]?.packSize || 0;
     const packSizeKg = packSizeG / 1000;
 
-    // FG stock from manual upload — FG Stock = SIH + SIT
+    // FG stock from manual upload — FG Stock = SIH + SIT (shared between M1 and M2)
     const stk = stockData[code] || {};
     const sih = stk.sih ?? 0;
     const sit = stk.sit ?? 0;
     const fgStock = stk.fgStock ?? (gsData?.skuMap[code]?.stock || STATIC_FG_STOCK[code] || 0);
-    const fgDoc   = drr > 0 ? fgStock / drr : null;
+    const fgDocM1 = drrM1 > 0 ? fgStock / drrM1 : null;
+    const fgDocM2 = drrM2 > 0 ? fgStock / drrM2 : null;
 
-    // -- RM DOC: per-material bottleneck using live MRP stock --
-    let rmDoc = null, rmStockDisplay = 0, rmReq30Display = 0;
-    const rmBomList = mrpData?.rmBom[code];
-    if (rmBomList && rmBomList.length > 0 && drr > 0 && packSizeKg > 0) {
-      const matDocs = [];
-      rmBomList.forEach(({key, pct}) => {
-        const matStock   = mrpData.rmStock[key] ?? 0;
-        const overrideM1 = mrpData.rmReq ? mrpData.rmReq[key] : null;
-        const reqPerDay  = (overrideM1 != null && overrideM1 > 0) ? (overrideM1 / 30) : (pct * packSizeKg * drr);
-        rmStockDisplay += matStock;
-        rmReq30Display += reqPerDay * 30;
-        if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
-      });
-      if (matDocs.length) rmDoc = Math.min(...matDocs);
-    } else {
-      const rmStockUp    = stk.rmStock ?? 0;
-      const rmReqPerUnit = gsData?.rmBomMap[code] || 0;
-      rmReq30Display = rmReqPerUnit * drr * 30;
-      rmStockDisplay = rmStockUp;
-      if (rmReq30Display > 0) rmDoc = rmStockUp / (rmReq30Display / 30);
+    // -- RM/PM DOC bottleneck for a given month: same live-MRP-first logic as before,
+    // just parameterized by that month's DRR and that month's Required Qty override --
+    function rmPmDoc(drr, rmReqMap, pmReqMap) {
+      let rmDoc = null, rmStockDisplay = 0, rmReq30Display = 0;
+      const rmBomList = mrpData?.rmBom[code];
+      if (rmBomList && rmBomList.length > 0 && drr > 0 && packSizeKg > 0) {
+        const matDocs = [];
+        rmBomList.forEach(({key, pct}) => {
+          const matStock  = mrpData.rmStock[key] ?? 0;
+          const overrideV = rmReqMap ? rmReqMap[key] : null;
+          const reqPerDay = (overrideV != null && overrideV > 0) ? (overrideV / 30) : (pct * packSizeKg * drr);
+          rmStockDisplay += matStock;
+          rmReq30Display += reqPerDay * 30;
+          if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
+        });
+        if (matDocs.length) rmDoc = Math.min(...matDocs);
+      } else {
+        const rmStockUp    = stk.rmStock ?? 0;
+        const rmReqPerUnit = gsData?.rmBomMap[code] || 0;
+        rmReq30Display = rmReqPerUnit * drr * 30;
+        rmStockDisplay = rmStockUp;
+        if (rmReq30Display > 0) rmDoc = rmStockUp / (rmReq30Display / 30);
+      }
+
+      let pmDoc = null, pmStockDisplay = 0, pmReq30Display = 0;
+      const pmBomList = mrpData?.pmBom[code];
+      if (pmBomList && pmBomList.length > 0 && drr > 0) {
+        const matDocs = [];
+        pmBomList.forEach(({key, qty}) => {
+          const matStock  = mrpData.pmStock[key] ?? 0;
+          const overrideV = pmReqMap ? pmReqMap[key] : null;
+          const reqPerDay = (overrideV != null && overrideV > 0) ? (overrideV / 30) : (qty * drr);
+          pmStockDisplay += matStock;
+          pmReq30Display += reqPerDay * 30;
+          if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
+        });
+        if (matDocs.length) pmDoc = Math.min(...matDocs);
+      } else {
+        const pmStockUp    = stk.pmStock ?? 0;
+        const pmReqPerUnit = gsData?.pmBomMap[code] || 0;
+        pmReq30Display = pmReqPerUnit * drr * 30;
+        pmStockDisplay = pmStockUp;
+        if (pmReq30Display > 0) pmDoc = pmStockUp / (pmReq30Display / 30);
+      }
+      const docVals = [rmDoc, pmDoc].filter(d => d !== null);
+      const minDoc  = docVals.length > 0 ? Math.min(...docVals) : null;
+      return { rmDoc, rmStockDisplay, rmReq30Display, pmDoc, pmStockDisplay, pmReq30Display, minDoc };
     }
 
-    // -- PM DOC: per-material bottleneck using live MRP stock --
-    let pmDoc = null, pmStockDisplay = 0, pmReq30Display = 0;
-    const pmBomList = mrpData?.pmBom[code];
-    if (pmBomList && pmBomList.length > 0 && drr > 0) {
-      const matDocs = [];
-      pmBomList.forEach(({key, qty}) => {
-        const matStock   = mrpData.pmStock[key] ?? 0;
-        const overrideM1 = mrpData.pmReq ? mrpData.pmReq[key] : null;
-        const reqPerDay  = (overrideM1 != null && overrideM1 > 0) ? (overrideM1 / 30) : (qty * drr);
-        pmStockDisplay += matStock;
-        pmReq30Display += reqPerDay * 30;
-        if (reqPerDay > 0) matDocs.push(matStock / reqPerDay);
-      });
-      if (matDocs.length) pmDoc = Math.min(...matDocs);
-    } else {
-      const pmStockUp    = stk.pmStock ?? 0;
-      const pmReqPerUnit = gsData?.pmBomMap[code] || 0;
-      pmReq30Display = pmReqPerUnit * drr * 30;
-      pmStockDisplay = pmStockUp;
-      if (pmReq30Display > 0) pmDoc = pmStockUp / (pmReq30Display / 30);
-    }
+    const m1Mat = rmPmDoc(drrM1, mrpData?.rmReq,  mrpData?.pmReq);
+    const m2Mat = rmPmDoc(drrM2, mrpData?.rmReq2, mrpData?.pmReq2);
 
-    // Score = Urgency x Strategic Weight x Material Feasibility
-    const urgency = (fgDoc != null && fgDoc > 0) ? 1 / fgDoc : 0;
+    // Score M1/M2 = Urgency (that month) x Strategic Weight (shared) x Material Feasibility (that month)
+    const urgencyM1 = (fgDocM1 != null && fgDocM1 > 0) ? 1 / fgDocM1 : 0;
+    const urgencyM2 = (fgDocM2 != null && fgDocM2 > 0) ? 1 / fgDocM2 : 0;
     const stratWt = jas.w;
-    const docVals = [rmDoc, pmDoc].filter(d => d !== null);
-    const minDoc  = docVals.length > 0 ? Math.min(...docVals) : null;
-    const rmConf  = minDoc !== null ? Math.min(1, minDoc / targetDoc) : 0;
-    const score   = urgency * stratWt * rmConf;
+    const mfM1 = m1Mat.minDoc !== null ? Math.min(1, m1Mat.minDoc / targetDoc) : 0;
+    const mfM2 = m2Mat.minDoc !== null ? Math.min(1, m2Mat.minDoc / targetDoc) : 0;
+    const scoreM1 = urgencyM1 * stratWt * mfM1;
+    const scoreM2 = urgencyM2 * stratWt * mfM2;
 
     result.push({
       code, name, cls: jas.c, priority: jas.p, packSizeKg,
-      sih, sit, fgStock, drr, fgDoc, urgency, stratWt,
-      rmStock: rmStockDisplay, rmReq30: rmReq30Display, rmDoc,
-      pmStock: pmStockDisplay, pmReq30: pmReq30Display, pmDoc,
-      minDoc, rmConf, score
+      sih, sit, fgStock, stratWt, targetDoc,
+      drrM1, drrM2, fgDocM1, fgDocM2, urgencyM1, urgencyM2,
+      rmStockM1: m1Mat.rmStockDisplay, rmReq30M1: m1Mat.rmReq30Display, rmDocM1: m1Mat.rmDoc,
+      pmStockM1: m1Mat.pmStockDisplay, pmReq30M1: m1Mat.pmReq30Display, pmDocM1: m1Mat.pmDoc,
+      rmStockM2: m2Mat.rmStockDisplay, rmReq30M2: m2Mat.rmReq30Display, rmDocM2: m2Mat.rmDoc,
+      pmStockM2: m2Mat.pmStockDisplay, pmReq30M2: m2Mat.pmReq30Display, pmDocM2: m2Mat.pmDoc,
+      minDocM1: m1Mat.minDoc, minDocM2: m2Mat.minDoc,
+      mfM1, mfM2, scoreM1, scoreM2,
+      runQtyM1: drrM1 * 13, runQtyM2: drrM2 * 13
     });
   });
-  result.sort((a, b) => b.score - a.score);
+  result.sort((a, b) => b.scoreM1 - a.scoreM1);
   return result;
 }
 
-function recompute(){rows=computeRows();renderScoreTable();renderSummaryCards();}
+function recompute(){rows=computeRows();renderScoreTable();renderSummaryCards();if(sched2mo)generateSchedule2Month();}
 
 // --- Render -------------------------------------------------------------------
 function renderScoreTable() {
   const filter=document.getElementById('scoreFilter').value.toLowerCase();
   const clsF=document.getElementById('cfgClass').value;
   const priF=document.getElementById('cfgPriority').value;
-  const maxScore=rows.length?rows[0].score:1;
+  const maxScoreM1=rows.length?Math.max(...rows.map(r=>r.scoreM1)):1;
+  const maxScoreM2=rows.length?Math.max(...rows.map(r=>r.scoreM2)):1;
+  const tgtDoc=document.getElementById('cfgTargetDoc').value;
 
   const filtered=rows.filter(r=>{
     if(clsF&&r.cls!==clsF) return false;
@@ -688,12 +744,12 @@ function renderScoreTable() {
     return true;
   });
 
-  const fmt=(v,d=1)=>v==null?'\u2014':(+v).toFixed(d);
-  const fmtI=v=>v==null?'\u2014':Math.round(v).toLocaleString();
+  const fmt=(v,d=1)=>v==null?'—':(+v).toFixed(d);
+  const fmtI=v=>v==null?'—':Math.round(v).toLocaleString();
 
   const tbody=document.getElementById('scoreBody');
   if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="21" class="empty"><h3>No matching rows</h3></td></tr>';return;
+    tbody.innerHTML='<tr><td colspan="29" class="empty"><h3>No matching rows</h3></td></tr>';return;
   }
   tbody.innerHTML=filtered.map((r,i)=>`
     <tr>
@@ -705,24 +761,37 @@ function renderScoreTable() {
       <td class="num">${fmtI(r.sih)}</td>
       <td class="num">${fmtI(r.sit)}</td>
       <td class="num">${fmtI(r.fgStock)}</td>
-      <td class="num">${fmt(r.drr,1)}</td>
-      <td class="num" style="color:${docColor(r.fgDoc)};font-weight:600">${fmt(r.fgDoc,1)}</td>
-      <td class="num">${fmt(r.urgency,4)}</td>
       <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
-                                          <td class="num" style="color:${docColor(r.minDoc)};font-weight:600">${fmt(r.minDoc,1)}</td>
-                                          <td class="num">${fmt(r.rmConf,2)}</td>
+      <td class="num">${tgtDoc}</td>
+      <td class="num">${fmt(r.drrM1,1)}</td>
+      <td class="num" style="color:${docColor(r.fgDocM1)};font-weight:600">${fmt(r.fgDocM1,1)}</td>
+      <td class="num">${fmt(r.urgencyM1,4)}</td>
+      <td class="num" style="color:${docColor(r.minDocM1)};font-weight:600">${fmt(r.minDocM1,1)}</td>
+      <td class="num">${fmt(r.mfM1,2)}</td>
       <td class="num">
         <div class="score-bar">
-          <div class="bar" style="width:${Math.round((r.score/(maxScore||1))*70)}px;background:${scoreColor(r.score,maxScore)}"></div>
-          <span class="score-val">${fmt(r.score,4)}</span>
+          <div class="bar" style="width:${Math.round((r.scoreM1/(maxScoreM1||1))*70)}px;background:${scoreColor(r.scoreM1,maxScoreM1)}"></div>
+          <span class="score-val">${fmt(r.scoreM1,4)}</span>
         </div>
       </td>
-      <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
-      <td class="num"><input type="number" min="0" step="500" value="${minCap[r.code]||1000}" data-code="${r.code}" onchange="minCap[this.dataset.code]=+this.value" style="width:55px"></td>
-      <td class="num"><input type="number" min="0" step="1000" value="${maxCap[r.code]||10000}" data-code="${r.code}" onchange="maxCap[this.dataset.code]=+this.value" style="width:60px"></td>
-      <td class="num">${fmt(r.drr*13,0)}</td>
+      <td class="num">${fmt(r.runQtyM1,0)}</td>
       <td class="num"><input type="number" min="0" step="100" value="${monthlyPlan[r.code]||''}" data-code="${r.code}" onchange="monthlyPlan[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
-      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.drr*13)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.drr*13),0):'—'}</td>
+      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.runQtyM1)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.runQtyM1),0):'—'}</td>
+      <td class="num">${fmt(r.drrM2,1)}</td>
+      <td class="num" style="color:${docColor(r.fgDocM2)};font-weight:600">${fmt(r.fgDocM2,1)}</td>
+      <td class="num">${fmt(r.urgencyM2,4)}</td>
+      <td class="num" style="color:${docColor(r.minDocM2)};font-weight:600">${fmt(r.minDocM2,1)}</td>
+      <td class="num">${fmt(r.mfM2,2)}</td>
+      <td class="num">
+        <div class="score-bar">
+          <div class="bar" style="width:${Math.round((r.scoreM2/(maxScoreM2||1))*70)}px;background:${scoreColor(r.scoreM2,maxScoreM2)}"></div>
+          <span class="score-val">${fmt(r.scoreM2,4)}</span>
+        </div>
+      </td>
+      <td class="num">${fmt(r.runQtyM2,0)}</td>
+      <td class="num"><input type="number" min="0" step="100" value="${monthlyPlanM2[r.code]||''}" data-code="${r.code}" onchange="monthlyPlanM2[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
+      <td class="num" style="color:${(+monthlyPlanM2[r.code]||0)-(r.runQtyM2)<0?'#e53935':'#388e3c'}">${(+monthlyPlanM2[r.code]||0)>0?fmt((+monthlyPlanM2[r.code]||0)-(r.runQtyM2),0):'—'}</td>
+      <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
     </tr>`).join('');
 }
 
@@ -743,15 +812,185 @@ function scoreColor(s,mx){
 
 function renderSummaryCards(){
   const total=rows.length;
-  const urgent=rows.filter(r=>r.fgDoc!=null&&r.fgDoc<15).length;
-  const noData=rows.filter(r=>r.fgDoc==null).length;
-  const avgConf=total?rows.reduce((s,r)=>s+r.rmConf,0)/total:0;
+  const urgent=rows.filter(r=>r.fgDocM1!=null&&r.fgDocM1<15).length;
+  const noData=rows.filter(r=>r.fgDocM1==null).length;
+  const avgConf=total?rows.reduce((s,r)=>s+r.mfM1,0)/total:0;
   document.getElementById('summaryCards').innerHTML=`
     <div class="card"><h4>Total SKUs</h4><div class="val">${total}</div><div class="sub">in JAS class</div></div>
-    <div class="card"><h4>Urgent (FG DOC &lt;15d)</h4><div class="val" style="color:#ef4444">${urgent}</div><div class="sub">need immediate run</div></div>
+    <div class="card"><h4>Urgent (FG DOC M1 &lt;15d)</h4><div class="val" style="color:#ef4444">${urgent}</div><div class="sub">need immediate run</div></div>
     <div class="card"><h4>Awaiting Stock Data</h4><div class="val" style="color:#94a3b8">${noData}</div><div class="sub">upload to score</div></div>
-    <div class="card"><h4>Avg Material Feasibility</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
+    <div class="card"><h4>Avg Material Feasibility M1</h4><div class="val">${(avgConf*100).toFixed(0)}%</div><div class="sub">target ${document.getElementById('cfgTargetDoc').value}d DOC</div></div>`;
 }
+
+// --- 2-month schedule: week-wise then day-wise (Priority Scoring tab) ----------
+// M1 SKUs (weeks 1-4) are ordered by descending Score M1; M2 SKUs (weeks 5-8) are ordered
+// by descending Score M2 — each phase uses that month's Run Qty (DRR x 13) as the total to
+// place, respecting both the shared weekly Line Cap (kg/week, config panel) and each SKU's
+// own per-row Line Cap (kg/week). Each week's resulting total is then spread evenly across
+// its 7 days for the day-wise view.
+function generateSchedule2Month(){
+  const wks = 8, wpm = 4;
+  const globalCapKg = n(document.getElementById('cfgLineCap').value) || 5000;
+
+  const weekAlloc = {};
+  rows.forEach(r => { weekAlloc[r.code] = new Array(wks).fill(0); });
+
+  function allocatePhase(orderedRows, runQtyField, weekStart, weekEnd){
+    const weekCap = new Array(wks).fill(0);
+    for (let w = weekStart; w < weekEnd; w++) weekCap[w] = globalCapKg;
+    orderedRows.forEach(r => {
+      const pkKg = r.packSizeKg || 0.001;
+      let remKg = Math.max(0, r[runQtyField]) * pkKg;
+      const perSkuCapKg = lineCap[r.code] || 10000;
+      for (let w = weekStart; w < weekEnd && remKg > 0; w++){
+        const cap = Math.min(weekCap[w], perSkuCapKg);
+        const fit = Math.min(remKg, cap);
+        if (fit > 0){
+          weekAlloc[r.code][w] += fit;
+          weekCap[w] -= fit;
+          remKg -= fit;
+        }
+      }
+    });
+  }
+
+  const m1Order = [...rows].sort((a,b)=>b.scoreM1-a.scoreM1);
+  const m2Order = [...rows].sort((a,b)=>b.scoreM2-a.scoreM2);
+  allocatePhase(m1Order, 'runQtyM1', 0, wpm);
+  allocatePhase(m2Order, 'runQtyM2', wpm, wks);
+
+  sched2mo = rows.map(r => ({
+    code:r.code, name:r.name, cls:r.cls, priority:r.priority,
+    scoreM1:r.scoreM1, scoreM2:r.scoreM2,
+    weekKg: weekAlloc[r.code]
+  })).filter(r => r.weekKg.some(v=>v>0));
+
+  renderSchedule2Month();
+  const statusEl=document.getElementById('sched2moStatus');
+  if(statusEl) statusEl.textContent =
+    `Scheduled ${sched2mo.length}/${rows.length} SKUs across ${wks} weeks (M1: weeks 1-${wpm}, M2: weeks ${wpm+1}-${wks})`;
+}
+
+function renderSchedule2Month(){
+  const weekWrap=document.getElementById('sched2moWeekWrap');
+  const dayWrap=document.getElementById('sched2moDayWrap');
+  if(!weekWrap||!dayWrap) return;
+  if(!sched2mo || !sched2mo.length){ weekWrap.style.display='none'; dayWrap.style.display='none'; return; }
+  weekWrap.style.display=''; dayWrap.style.display='';
+  const wks=8;
+
+  document.getElementById('sched2moWeekHead').innerHTML=`<tr>
+    <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
+    ${Array.from({length:wks},(_,i)=>`<th class="num">Week ${i+1}${i<4?' (M1)':' (M2)'} (kg)</th>`).join('')}
+    <th class="num">Total (kg)</th></tr>`;
+  document.getElementById('sched2moWeekBody').innerHTML=sched2mo.map((r,i)=>{
+    const tot=r.weekKg.reduce((s,v)=>s+v,0);
+    return `<tr>
+      <td style="color:#94a3b8">${i+1}</td>
+      <td style="font-family:monospace;font-size:11px">${r.code}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'—'}</td>
+      <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
+      <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+      ${r.weekKg.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'—'}</td>`).join('')}
+      <td class="num"><b>${tot.toFixed(0)}</b></td>
+    </tr>`;
+  }).join('');
+
+  let dayHead=`<tr><th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>`;
+  for(let w=0;w<wks;w++){ for(let d=1;d<=7;d++) dayHead+=`<th class="num">W${w+1}D${d}</th>`; }
+  dayHead+=`<th class="num">Total (kg)</th></tr>`;
+  document.getElementById('sched2moDayHead').innerHTML=dayHead;
+  document.getElementById('sched2moDayBody').innerHTML=sched2mo.map((r,i)=>{
+    const tot=r.weekKg.reduce((s,v)=>s+v,0);
+    let cells='';
+    r.weekKg.forEach(wk=>{
+      const perDay=wk/7;
+      for(let d=0;d<7;d++) cells+=`<td class="num" style="color:${perDay>0?'#1a1a2e':'#94a3b8'}">${perDay>0?perDay.toFixed(1):'—'}</td>`;
+    });
+    return `<tr>
+      <td style="color:#94a3b8">${i+1}</td>
+      <td style="font-family:monospace;font-size:11px">${r.code}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'—'}</td>
+      <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
+      <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+      ${cells}
+      <td class="num"><b>${tot.toFixed(0)}</b></td>
+    </tr>`;
+  }).join('');
+}
+
+// --- DRR import (Actual M0 / Forecast M0 / Forecast M1 / Forecast M2) ----------
+function drrBucketStore(){
+  const b=document.getElementById('drrBucketSelect').value;
+  return b==='actualM0'?drrActualM0:b==='forecastM0'?drrForecastM0:b==='forecastM1'?drrForecastM1:drrForecastM2;
+}
+function importDrr(input) {
+  const file=input.files[0]; if(!file) return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  const reader=new FileReader();
+  if(ext==='csv'){
+    reader.onload=e=>{processDrrCsv(e.target.result);input.value='';};
+    reader.readAsText(file);
+  } else {
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        processDrrCsv(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]));
+      }catch(err){alert('Cannot read XLSX: '+err.message);}
+      input.value='';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+function processDrrCsv(text){
+  const store=drrBucketStore();
+  const rawRows=text.trim().split(/\r?\n/).map(l=>parseRow(l).map(c=>c.trim()));
+  if(!rawRows.length){setStatus('The file has no rows.','warn');return;}
+  const known=knownSkuCodes();
+  const width=rawRows.reduce((w,r)=>Math.max(w,r.length),0);
+  let idCol=0, idHits=-1;
+  for(let c=0;c<width;c++){
+    let hits=0;
+    rawRows.forEach(r=>{const v=(r[c]||'').trim(); if(v&&known.has(v)) hits++;});
+    if(hits>idHits){idHits=hits;idCol=c;}
+  }
+  if(idHits<=0){setStatus('Could not find a column matching any known SKU code in this file.','warn');return;}
+  const hdr=(rawRows[0]||[]).map(h=>(h||'').toLowerCase().replace(/[^a-z0-9]/g,''));
+  const taken=new Set([idCol]);
+  let colDrr=findColByKeywords(hdr,taken,['drr']);
+  const usedHeader=colDrr>=0;
+  if(colDrr<0){
+    let qHits=-1;
+    for(let c=0;c<width;c++){
+      if(c===idCol) continue;
+      let hits=0;
+      rawRows.forEach(r=>{const v=(r[c]||'').replace(/,/g,'').trim(); if(v!==''&&isFinite(parseFloat(v))) hits++;});
+      if(hits>qHits){qHits=hits;colDrr=c;}
+    }
+  }
+  if(colDrr<0){setStatus('Could not find a DRR quantity column in this file.','warn');return;}
+  const numAt=(r,c)=>{if(c<0) return null; const v=(r[c]||'').replace(/,/g,'').trim(); return v!==''&&isFinite(parseFloat(v))?parseFloat(v):null;};
+  let loaded=0;
+  rawRows.forEach((r,i)=>{
+    if(i===0&&usedHeader) return;
+    const code=(r[idCol]||'').trim();
+    if(!code||!known.has(code)) return;
+    const v=numAt(r,colDrr);
+    if(v==null) return;
+    store[code]=v;
+    loaded++;
+  });
+  const bucketLabel=document.getElementById('drrBucketSelect').selectedOptions[0].text;
+  setStatus(`DRR loaded (${bucketLabel}) &mdash; ${loaded} SKU(s) matched by SKU code`,'ok');
+  recompute();
+}
+function downloadDrrTemplate(){
+  const csv='SKU Code,DRR\n'+Object.keys(JAS_CLASS).slice(0,5).map(c=>c+',0').join('\n')+'\n';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='drr_import_template.csv';a.click();
+}
+
 
 // --- Production plan ----------------------------------------------------------
 function runSchedule(){
@@ -759,8 +998,8 @@ function runSchedule(){
   const capKg=n(document.getElementById('cfgLineCap').value)||5000;
   const tgDoc=n(document.getElementById('cfgTargetFgDoc').value)||30;
 
-  const plan=rows.filter(r=>r.drr>0||r.fgStock>0).map(r=>{
-    const tgStock=r.drr*tgDoc;
+  const plan=rows.filter(r=>r.drrM1>0||r.fgStock>0).map(r=>{
+    const tgStock=r.drrM1*tgDoc;
     const toProdUnits=Math.max(0,tgStock-r.fgStock);
     const pkKg=r.packSizeKg||(gsData?.skuMap[r.code]?.packSize||0)/1000;
     const toProdKg=toProdUnits*(pkKg||0.001);
@@ -768,7 +1007,7 @@ function runSchedule(){
   });
 
   const weekCap=new Array(wks).fill(capKg);
-  plan.sort((a,b)=>b.score-a.score);
+  plan.sort((a,b)=>b.scoreM1-a.scoreM1);
   plan.forEach(p=>{
     let rem=p.toProdKg;
     for(let w=0;w<wks&&rem>0;w++){
@@ -787,7 +1026,7 @@ function renderPlanTable(){
   const wks=schedPlan.length?schedPlan[0].weekAlloc.length:8;
   document.getElementById('planHead').innerHTML=`<tr>
     <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
-    <th class="num">Score</th><th class="num">Target (kg)</th>
+    <th class="num">Score M1</th><th class="num">Target (kg)</th>
     ${Array.from({length:wks},(_,i)=>`<th class="num">W${i+1}</th>`).join('')}
     <th class="num">Scheduled (kg)</th>
   </tr>`;
@@ -805,7 +1044,7 @@ function renderPlanTable(){
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'\u2014'}</td>
       <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
       <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
-      <td class="num"><b>${r.score.toFixed(4)}</b></td>
+      <td class="num"><b>${r.scoreM1.toFixed(4)}</b></td>
       <td class="num">${r.toProdKg.toFixed(0)}</td>
       ${r.weekAlloc.map(v=>`<td class="num" style="color:${v>0?'#1a1a2e':'#94a3b8'}">${v>0?v.toFixed(0):'\u2014'}</td>`).join('')}
       <td class="num"><b>${tot.toFixed(0)}</b></td>
@@ -834,16 +1073,22 @@ function setStatus(msg,state){
   d.className='status-dot'+(state==='ok'?' ok':state==='warn'?' warn':'');
 }
 function downloadCSV(){
-  const hdr=['Rank','SKU Code','SKU Name','Class','Volatility','SIH','SIT','FG Stock','DRR','FG DOC',
-    'Urgency','Strategic Weight','RM Stock (kg)','RM Req (kg/30d)','RM DOC',
-    'PM Stock','PM Req (/30d)','PM DOC','Material Feasibility','Score'];
+  const hdr=['Rank','SKU Code','SKU Name','Class','Volatility','SIH','SIT','FG Stock','Strategic Weight','Target DOC',
+    'DRR M1','FG DOC M1','Urgency M1','RM Stock M1 (kg)','RM Req M1 (kg/30d)','RM DOC M1',
+    'PM Stock M1','PM Req M1 (/30d)','PM DOC M1','Material Feasibility M1','Score M1','Run Qty M1',
+    'DRR M2','FG DOC M2','Urgency M2','RM Stock M2 (kg)','RM Req M2 (kg/30d)','RM DOC M2',
+    'PM Stock M2','PM Req M2 (/30d)','PM DOC M2','Material Feasibility M2','Score M2','Run Qty M2'];
   const f=(v,d=4)=>v==null?'':(+v).toFixed(d);
   const lines=[hdr.join(',')];
   rows.forEach((r,i)=>lines.push([
     i+1,`"${r.code}"`,`"${r.name}"`,r.cls,r.priority,
-    r.sih,r.sit,r.fgStock,f(r.drr,2),f(r.fgDoc,1),f(r.urgency,4),r.stratWt,
-    r.rmStock,f(r.rmReq30,2),f(r.rmDoc,1),
-    r.pmStock,f(r.pmReq30,2),f(r.pmDoc,1),f(r.rmConf,4),f(r.score,4)
+    r.sih,r.sit,r.fgStock,r.stratWt,r.targetDoc,
+    f(r.drrM1,2),f(r.fgDocM1,1),f(r.urgencyM1,4),
+    r.rmStockM1,f(r.rmReq30M1,2),f(r.rmDocM1,1),
+    r.pmStockM1,f(r.pmReq30M1,2),f(r.pmDocM1,1),f(r.mfM1,4),f(r.scoreM1,4),f(r.runQtyM1,0),
+    f(r.drrM2,2),f(r.fgDocM2,1),f(r.urgencyM2,4),
+    r.rmStockM2,f(r.rmReq30M2,2),f(r.rmDocM2,1),
+    r.pmStockM2,f(r.pmReq30M2,2),f(r.pmDocM2,1),f(r.mfM2,4),f(r.scoreM2,4),f(r.runQtyM2,0)
   ].join(',')));
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
@@ -877,7 +1122,9 @@ window.addEventListener('message', e => {
     rmBom:    e.data.rmBom    || {},
     pmBom:    e.data.pmBom    || {},
     rmReq:    e.data.rmReq    || {},   // real imported Required Qty M1 per RM (kg), from MRP tool
-    pmReq:    e.data.pmReq    || {}    // real imported Required Qty M1 per PM (units), from MRP tool
+    pmReq:    e.data.pmReq    || {},   // real imported Required Qty M1 per PM (units), from MRP tool
+    rmReq2:   e.data.rmReq2   || {},   // real imported Required Qty M2 per RM (kg), from MRP tool
+    pmReq2:   e.data.pmReq2   || {}    // real imported Required Qty M2 per PM (units), from MRP tool
   };
   const badge = document.getElementById('mrpSyncBadge');
   if (badge) badge.classList.add('visible');
