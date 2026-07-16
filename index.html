@@ -102,19 +102,6 @@ tr:last-child td{border-bottom:none}
   <span style="font-size:11px;color:#94a3b8">Any layout works &mdash; matched by SKU code. Updates only SIH, SIT, DRR; RM/PM Stock already loaded is left untouched.</span>
   <button class="btn secondary" onclick="downloadSihSitDrrTemplate()">Download Template</button>
 </div>
-<div class="import-bar">
-  <label>DRR Import &mdash; bucket:</label>
-  <select id="drrBucketSelect">
-    <option value="actualM0">Actual &mdash; Current Month (M0)</option>
-    <option value="forecastM0">Forecast &mdash; Current Month (M0)</option>
-    <option value="forecastM1">Forecast &mdash; Month 1 (M1)</option>
-    <option value="forecastM2">Forecast &mdash; Month 2 (M2)</option>
-  </select>
-  <input type="file" id="drrFile" accept=".xlsx,.csv" onchange="importDrr(this)">
-  <span style="font-size:11px;color:#94a3b8">Any layout works &mdash; matched by SKU code. Loads into whichever bucket is selected above.</span>
-  <button class="btn secondary" onclick="downloadDrrTemplate()">Download Template</button>
-</div>
-
 <div class="config-panel">
   <div class="cfg-group"><label>Line Cap (kg/week):</label><input type="number" id="cfgLineCap" value="5000" min="0"></div>
   <div class="cfg-group"><label>Target FG DOC (days):</label><input type="number" id="cfgTargetFgDoc" value="30" min="1"></div>
@@ -193,11 +180,35 @@ tr:last-child td{border-bottom:none}
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
         <th class="num">SIH</th><th class="num">SIT</th>
         <th class="num">FG Stock</th><th class="num">Strategic Weight</th><th class="num">Target DOC</th>
-        <th class="num">DRR M1</th><th class="num">FG DOC M1</th><th class="num">Urgency M1</th>
+        <th class="num" style="white-space:normal;min-width:110px">
+          DRR M1
+          <div style="display:flex;gap:3px;justify-content:center;align-items:center;margin-top:3px;font-weight:400">
+            <select id="drrM1Mode" style="font-size:9px;padding:0;width:52px;color:#1a1a2e">
+              <option value="actual">Actual</option>
+              <option value="forecast" selected>Forecast</option>
+            </select>
+            <label class="btn secondary" style="font-size:9px;padding:1px 4px;cursor:pointer;margin:0">Import
+              <input type="file" accept=".xlsx,.csv" style="display:none" onchange="importDrrCol('m1',this)">
+            </label>
+            <a href="javascript:void(0)" onclick="downloadDrrTemplate()" style="font-size:9px;color:#93c5fd;text-decoration:underline">tmpl</a>
+          </div>
+        </th><th class="num">FG DOC M1</th><th class="num">Urgency M1</th>
         <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
         <th class="num">Material<br>Feasibility M1</th><th class="num">Score M1 &#9660;</th>
         <th class="num">Run Qty M1</th><th class="num">Monthly Plan M1</th><th class="num">Balance M1</th>
-        <th class="num">DRR M2</th><th class="num">FG DOC M2</th><th class="num">Urgency M2</th>
+        <th class="num" style="white-space:normal;min-width:110px">
+          DRR M2
+          <div style="display:flex;gap:3px;justify-content:center;align-items:center;margin-top:3px;font-weight:400">
+            <select id="drrM2Mode" style="font-size:9px;padding:0;width:52px;color:#1a1a2e">
+              <option value="actual">Actual</option>
+              <option value="forecast" selected>Forecast</option>
+            </select>
+            <label class="btn secondary" style="font-size:9px;padding:1px 4px;cursor:pointer;margin:0">Import
+              <input type="file" accept=".xlsx,.csv" style="display:none" onchange="importDrrCol('m2',this)">
+            </label>
+            <a href="javascript:void(0)" onclick="downloadDrrTemplate()" style="font-size:9px;color:#93c5fd;text-decoration:underline">tmpl</a>
+          </div>
+        </th><th class="num">FG DOC M2</th><th class="num">Urgency M2</th>
         <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M2</th>
         <th class="num">Material<br>Feasibility M2</th><th class="num">Score M2</th>
         <th class="num">Run Qty M2</th><th class="num">Monthly Plan M2</th><th class="num">Balance M2</th>
@@ -352,9 +363,9 @@ let rows      = [];
 let schedPlan = [];
 let sched2mo  = null;   // generated 2-month week/day schedule (Priority Scoring tab)
 let inputPlan = {}, inputPlanM2 = {}, monthlyPlan = {}, monthlyPlanM2 = {}, lineCap = {};
-// DRR buckets: Actual/Forecast for the current month (M0), Forecast for M1 & M2 — each
-// populated independently via the DRR Import control (pick a bucket, then upload a file).
-let drrActualM0 = {}, drrForecastM0 = {}, drrForecastM1 = {}, drrForecastM2 = {};
+// DRR buckets: Actual/Forecast per month, populated independently via the Import control
+// embedded in each DRR M1 / DRR M2 column header (toggle Actual/Forecast, then upload).
+let drrActualM1 = {}, drrForecastM1 = {}, drrActualM2 = {}, drrForecastM2 = {};
 
 // --- GSheet fetch ------------------------------------------------------------
 async function gvizFetch(tab) {
@@ -617,7 +628,7 @@ function computeRows() {
   const codes = new Set([
     ...Object.keys(JAS_CLASS), ...Object.keys(stockData),
     ...Object.keys(DRR_DATA),  ...(gsData ? Object.keys(gsData.drrMap) : []),
-    ...Object.keys(drrForecastM1), ...Object.keys(drrForecastM2)
+    ...Object.keys(drrActualM1), ...Object.keys(drrForecastM1), ...Object.keys(drrActualM2), ...Object.keys(drrForecastM2)
   ]);
   const result = [];
   codes.forEach(code => {
@@ -628,10 +639,12 @@ function computeRows() {
     // then finally the legacy single-DRR sources (Stock Upload / SIH-SIT-DRR / embedded).
     const stkForDrr = stockData[code] || {};
     const legacyDrr = (stkForDrr.drr != null ? stkForDrr.drr : null) ?? (DRR_DATA[code] != null ? DRR_DATA[code] : null) ?? (gsData?.drrMap[code] ?? 0);
-    const m0Baseline = (drrForecastM0[code] != null ? drrForecastM0[code] : null) ??
-                       (drrActualM0[code] != null ? drrActualM0[code] : null) ?? legacyDrr;
-    const drrM1 = (drrForecastM1[code] != null ? drrForecastM1[code] : null) ?? m0Baseline;
-    const drrM2 = (drrForecastM2[code] != null ? drrForecastM2[code] : null) ?? m0Baseline;
+    // Actual (measured) takes priority over Forecast when both are present for that month;
+    // if neither has been uploaded yet, fall back to the legacy single-DRR sources.
+    const drrM1 = (drrActualM1[code] != null ? drrActualM1[code] : null) ??
+                  (drrForecastM1[code] != null ? drrForecastM1[code] : null) ?? legacyDrr;
+    const drrM2 = (drrActualM2[code] != null ? drrActualM2[code] : null) ??
+                  (drrForecastM2[code] != null ? drrForecastM2[code] : null) ?? legacyDrr;
 
     // SKU name: live MRP first, then GSheet, then code
     const name = mrpData?.skuNames[code] || gsData?.skuMap[code]?.name || '';
@@ -919,31 +932,34 @@ function renderSchedule2Month(){
   }).join('');
 }
 
-// --- DRR import (Actual M0 / Forecast M0 / Forecast M1 / Forecast M2) ----------
-function drrBucketStore(){
-  const b=document.getElementById('drrBucketSelect').value;
-  return b==='actualM0'?drrActualM0:b==='forecastM0'?drrForecastM0:b==='forecastM1'?drrForecastM1:drrForecastM2;
+// --- DRR import: separate Import button per column (DRR M1 / DRR M2 headers), each with
+// its own Actual/Forecast toggle right there in the header. ----------------------------
+function drrColStore(month){
+  const mode=document.getElementById('drr'+(month==='m1'?'M1':'M2')+'Mode').value;
+  if(month==='m1') return mode==='actual'?drrActualM1:drrForecastM1;
+  return mode==='actual'?drrActualM2:drrForecastM2;
 }
-function importDrr(input) {
+function importDrrCol(month, input) {
   const file=input.files[0]; if(!file) return;
+  const store=drrColStore(month);
+  const modeLabel=document.getElementById('drr'+(month==='m1'?'M1':'M2')+'Mode').selectedOptions[0].text;
   const ext=file.name.split('.').pop().toLowerCase();
   const reader=new FileReader();
   if(ext==='csv'){
-    reader.onload=e=>{processDrrCsv(e.target.result);input.value='';};
+    reader.onload=e=>{processDrrCsv(e.target.result, store, month.toUpperCase()+' '+modeLabel);input.value='';};
     reader.readAsText(file);
   } else {
     reader.onload=e=>{
       try{
         const wb=XLSX.read(e.target.result,{type:'array'});
-        processDrrCsv(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]));
+        processDrrCsv(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]), store, month.toUpperCase()+' '+modeLabel);
       }catch(err){alert('Cannot read XLSX: '+err.message);}
       input.value='';
     };
     reader.readAsArrayBuffer(file);
   }
 }
-function processDrrCsv(text){
-  const store=drrBucketStore();
+function processDrrCsv(text, store, label){
   const rawRows=text.trim().split(/\r?\n/).map(l=>parseRow(l).map(c=>c.trim()));
   if(!rawRows.length){setStatus('The file has no rows.','warn');return;}
   const known=knownSkuCodes();
@@ -980,8 +996,7 @@ function processDrrCsv(text){
     store[code]=v;
     loaded++;
   });
-  const bucketLabel=document.getElementById('drrBucketSelect').selectedOptions[0].text;
-  setStatus(`DRR loaded (${bucketLabel}) &mdash; ${loaded} SKU(s) matched by SKU code`,'ok');
+  setStatus(`DRR loaded${label?' ('+label+')':''} &mdash; ${loaded} SKU(s) matched by SKU code`,'ok');
   recompute();
 }
 function downloadDrrTemplate(){
