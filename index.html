@@ -174,8 +174,10 @@ tr:last-child td{border-bottom:none}
     <input type="text" id="scoreFilter" placeholder="Filter by SKU code or name..." oninput="renderScoreTable()">
   </div>
   <div class="summary-row" id="summaryCards"></div>
+
+  <h3 style="margin:14px 0 8px;font-size:14px;color:#1e293b">Month 1 (M1) Score Table &mdash; drives Week 1-4 schedule</h3>
   <div class="tbl-wrap">
-    <table id="scoreTable">
+    <table id="scoreTableM1">
       <thead><tr>
         <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
         <th class="num">SIH</th><th class="num">SIT</th>
@@ -195,6 +197,19 @@ tr:last-child td{border-bottom:none}
         <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M1</th>
         <th class="num">Material<br>Feasibility M1</th><th class="num">Score M1 &#9660;</th>
         <th class="num">Run Qty M1</th><th class="num">Monthly Plan M1</th><th class="num">Balance M1</th>
+        <th class="num">Line Cap</th>
+      </tr></thead>
+      <tbody id="scoreBodyM1"></tbody>
+    </table>
+  </div>
+
+  <h3 style="margin:18px 0 8px;font-size:14px;color:#1e293b">Month 2 (M2) Score Table &mdash; drives Week 5-8 schedule</h3>
+  <div class="tbl-wrap">
+    <table id="scoreTableM2">
+      <thead><tr>
+        <th>#</th><th>SKU Code</th><th>SKU Name</th><th>Class</th><th>Volatility</th>
+        <th class="num">SIH</th><th class="num">SIT</th>
+        <th class="num">FG Stock</th><th class="num">Strategic Weight</th><th class="num">Target DOC</th>
         <th class="num" style="white-space:normal;min-width:110px">
           DRR M2
           <div style="display:flex;gap:3px;justify-content:center;align-items:center;margin-top:3px;font-weight:400">
@@ -208,11 +223,11 @@ tr:last-child td{border-bottom:none}
           </div>
         </th><th class="num">FG DOC M2</th><th class="num">Urgency M2</th>
         <th class="num" style="min-width:110px">Min(RM DOC,<br>PM DOC) M2</th>
-        <th class="num">Material<br>Feasibility M2</th><th class="num">Score M2</th>
+        <th class="num">Material<br>Feasibility M2</th><th class="num">Score M2 &#9660;</th>
         <th class="num">Run Qty M2</th><th class="num">Monthly Plan M2</th><th class="num">Balance M2</th>
         <th class="num">Line Cap</th>
       </tr></thead>
-      <tbody id="scoreBody"></tbody>
+      <tbody id="scoreBodyM2"></tbody>
     </table>
   </div>
 
@@ -711,12 +726,21 @@ function computeRows() {
     const m1Mat = rmPmDoc(drrM1, mrpData?.rmReq,  mrpData?.pmReq);
     const m2Mat = rmPmDoc(drrM2, mrpData?.rmReq2, mrpData?.pmReq2);
 
+    // Min(RM DOC, PM DOC) M1/M2: prefer the authoritative number broadcast straight from
+    // the MRP tool's own SKU DOC tab (mrpData.skuDocM1/skuDocM2) — this is the exact same
+    // figure that tab shows, so the two tools can never disagree. Only fall back to this
+    // Scheduler's own local recompute (m1Mat/m2Mat above) when the MRP tool isn't connected.
+    const liveMinDocM1 = mrpData?.skuDocM1 ? mrpData.skuDocM1[code] : undefined;
+    const liveMinDocM2 = mrpData?.skuDocM2 ? mrpData.skuDocM2[code] : undefined;
+    const minDocM1 = liveMinDocM1 !== undefined ? liveMinDocM1 : m1Mat.minDoc;
+    const minDocM2 = liveMinDocM2 !== undefined ? liveMinDocM2 : m2Mat.minDoc;
+
     // Score M1/M2 = Urgency (that month) x Strategic Weight (shared) x Material Feasibility (that month)
     const urgencyM1 = (fgDocM1 != null && fgDocM1 > 0) ? 1 / fgDocM1 : 0;
     const urgencyM2 = (fgDocM2 != null && fgDocM2 > 0) ? 1 / fgDocM2 : 0;
     const stratWt = jas.w;
-    const mfM1 = m1Mat.minDoc !== null ? Math.min(1, m1Mat.minDoc / targetDoc) : 0;
-    const mfM2 = m2Mat.minDoc !== null ? Math.min(1, m2Mat.minDoc / targetDoc) : 0;
+    const mfM1 = minDocM1 !== null && minDocM1 != null ? Math.min(1, minDocM1 / targetDoc) : 0;
+    const mfM2 = minDocM2 !== null && minDocM2 != null ? Math.min(1, minDocM2 / targetDoc) : 0;
     const scoreM1 = urgencyM1 * stratWt * mfM1;
     const scoreM2 = urgencyM2 * stratWt * mfM2;
 
@@ -728,7 +752,7 @@ function computeRows() {
       pmStockM1: m1Mat.pmStockDisplay, pmReq30M1: m1Mat.pmReq30Display, pmDocM1: m1Mat.pmDoc,
       rmStockM2: m2Mat.rmStockDisplay, rmReq30M2: m2Mat.rmReq30Display, rmDocM2: m2Mat.rmDoc,
       pmStockM2: m2Mat.pmStockDisplay, pmReq30M2: m2Mat.pmReq30Display, pmDocM2: m2Mat.pmDoc,
-      minDocM1: m1Mat.minDoc, minDocM2: m2Mat.minDoc,
+      minDocM1, minDocM2,
       mfM1, mfM2, scoreM1, scoreM2,
       runQtyM1: drrM1 * 13, runQtyM2: drrM2 * 13
     });
@@ -758,52 +782,79 @@ function renderScoreTable() {
   const fmt=(v,d=1)=>v==null?'—':(+v).toFixed(d);
   const fmtI=v=>v==null?'—':Math.round(v).toLocaleString();
 
-  const tbody=document.getElementById('scoreBody');
-  if(!filtered.length){
-    tbody.innerHTML='<tr><td colspan="29" class="empty"><h3>No matching rows</h3></td></tr>';return;
+  // Two independent tables, each sorted by its own month's Score — M1 table drives the
+  // Week 1-4 schedule ordering, M2 table drives Week 5-8, so the two rankings can (and
+  // normally will) differ per SKU.
+  const filteredM1=[...filtered].sort((a,b)=>b.scoreM1-a.scoreM1);
+  const filteredM2=[...filtered].sort((a,b)=>b.scoreM2-a.scoreM2);
+
+  const tbodyM1=document.getElementById('scoreBodyM1');
+  if(!filteredM1.length){
+    tbodyM1.innerHTML='<tr><td colspan="20" class="empty"><h3>No matching rows</h3></td></tr>';
+  } else {
+    tbodyM1.innerHTML=filteredM1.map((r,i)=>`
+      <tr>
+        <td style="color:#94a3b8">${i+1}</td>
+        <td style="font-family:monospace;font-size:11px">${r.code}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">&mdash;</span>'}</td>
+        <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
+        <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+        <td class="num">${fmtI(r.sih)}</td>
+        <td class="num">${fmtI(r.sit)}</td>
+        <td class="num">${fmtI(r.fgStock)}</td>
+        <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
+        <td class="num">${tgtDoc}</td>
+        <td class="num">${fmt(r.drrM1,1)}</td>
+        <td class="num" style="color:${docColor(r.fgDocM1)};font-weight:600">${fmt(r.fgDocM1,1)}</td>
+        <td class="num">${fmt(r.urgencyM1,4)}</td>
+        <td class="num" style="color:${docColor(r.minDocM1)};font-weight:600">${fmt(r.minDocM1,1)}</td>
+        <td class="num">${fmt(r.mfM1,2)}</td>
+        <td class="num">
+          <div class="score-bar">
+            <div class="bar" style="width:${Math.round((r.scoreM1/(maxScoreM1||1))*70)}px;background:${scoreColor(r.scoreM1,maxScoreM1)}"></div>
+            <span class="score-val">${fmt(r.scoreM1,4)}</span>
+          </div>
+        </td>
+        <td class="num">${fmt(r.runQtyM1,0)}</td>
+        <td class="num"><input type="number" min="0" step="100" value="${monthlyPlan[r.code]||''}" data-code="${r.code}" onchange="monthlyPlan[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
+        <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.runQtyM1)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.runQtyM1),0):'—'}</td>
+        <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
+      </tr>`).join('');
   }
-  tbody.innerHTML=filtered.map((r,i)=>`
-    <tr>
-      <td style="color:#94a3b8">${i+1}</td>
-      <td style="font-family:monospace;font-size:11px">${r.code}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">&mdash;</span>'}</td>
-      <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
-      <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
-      <td class="num">${fmtI(r.sih)}</td>
-      <td class="num">${fmtI(r.sit)}</td>
-      <td class="num">${fmtI(r.fgStock)}</td>
-      <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
-      <td class="num">${tgtDoc}</td>
-      <td class="num">${fmt(r.drrM1,1)}</td>
-      <td class="num" style="color:${docColor(r.fgDocM1)};font-weight:600">${fmt(r.fgDocM1,1)}</td>
-      <td class="num">${fmt(r.urgencyM1,4)}</td>
-      <td class="num" style="color:${docColor(r.minDocM1)};font-weight:600">${fmt(r.minDocM1,1)}</td>
-      <td class="num">${fmt(r.mfM1,2)}</td>
-      <td class="num">
-        <div class="score-bar">
-          <div class="bar" style="width:${Math.round((r.scoreM1/(maxScoreM1||1))*70)}px;background:${scoreColor(r.scoreM1,maxScoreM1)}"></div>
-          <span class="score-val">${fmt(r.scoreM1,4)}</span>
-        </div>
-      </td>
-      <td class="num">${fmt(r.runQtyM1,0)}</td>
-      <td class="num"><input type="number" min="0" step="100" value="${monthlyPlan[r.code]||''}" data-code="${r.code}" onchange="monthlyPlan[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
-      <td class="num" style="color:${(+monthlyPlan[r.code]||0)-(r.runQtyM1)<0?'#e53935':'#388e3c'}">${(+monthlyPlan[r.code]||0)>0?fmt((+monthlyPlan[r.code]||0)-(r.runQtyM1),0):'—'}</td>
-      <td class="num">${fmt(r.drrM2,1)}</td>
-      <td class="num" style="color:${docColor(r.fgDocM2)};font-weight:600">${fmt(r.fgDocM2,1)}</td>
-      <td class="num">${fmt(r.urgencyM2,4)}</td>
-      <td class="num" style="color:${docColor(r.minDocM2)};font-weight:600">${fmt(r.minDocM2,1)}</td>
-      <td class="num">${fmt(r.mfM2,2)}</td>
-      <td class="num">
-        <div class="score-bar">
-          <div class="bar" style="width:${Math.round((r.scoreM2/(maxScoreM2||1))*70)}px;background:${scoreColor(r.scoreM2,maxScoreM2)}"></div>
-          <span class="score-val">${fmt(r.scoreM2,4)}</span>
-        </div>
-      </td>
-      <td class="num">${fmt(r.runQtyM2,0)}</td>
-      <td class="num"><input type="number" min="0" step="100" value="${monthlyPlanM2[r.code]||''}" data-code="${r.code}" onchange="monthlyPlanM2[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
-      <td class="num" style="color:${(+monthlyPlanM2[r.code]||0)-(r.runQtyM2)<0?'#e53935':'#388e3c'}">${(+monthlyPlanM2[r.code]||0)>0?fmt((+monthlyPlanM2[r.code]||0)-(r.runQtyM2),0):'—'}</td>
-      <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
-    </tr>`).join('');
+
+  const tbodyM2=document.getElementById('scoreBodyM2');
+  if(!filteredM2.length){
+    tbodyM2.innerHTML='<tr><td colspan="20" class="empty"><h3>No matching rows</h3></td></tr>';
+  } else {
+    tbodyM2.innerHTML=filteredM2.map((r,i)=>`
+      <tr>
+        <td style="color:#94a3b8">${i+1}</td>
+        <td style="font-family:monospace;font-size:11px">${r.code}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'<span style="color:#94a3b8">&mdash;</span>'}</td>
+        <td><span class="pill pill-${r.cls}">${r.cls}</span></td>
+        <td><span class="pill pill-${r.priority}">${r.priority}</span></td>
+        <td class="num">${fmtI(r.sih)}</td>
+        <td class="num">${fmtI(r.sit)}</td>
+        <td class="num">${fmtI(r.fgStock)}</td>
+        <td class="num"><b>${r.stratWt.toFixed(1)}</b></td>
+        <td class="num">${tgtDoc}</td>
+        <td class="num">${fmt(r.drrM2,1)}</td>
+        <td class="num" style="color:${docColor(r.fgDocM2)};font-weight:600">${fmt(r.fgDocM2,1)}</td>
+        <td class="num">${fmt(r.urgencyM2,4)}</td>
+        <td class="num" style="color:${docColor(r.minDocM2)};font-weight:600">${fmt(r.minDocM2,1)}</td>
+        <td class="num">${fmt(r.mfM2,2)}</td>
+        <td class="num">
+          <div class="score-bar">
+            <div class="bar" style="width:${Math.round((r.scoreM2/(maxScoreM2||1))*70)}px;background:${scoreColor(r.scoreM2,maxScoreM2)}"></div>
+            <span class="score-val">${fmt(r.scoreM2,4)}</span>
+          </div>
+        </td>
+        <td class="num">${fmt(r.runQtyM2,0)}</td>
+        <td class="num"><input type="number" min="0" step="100" value="${monthlyPlanM2[r.code]||''}" data-code="${r.code}" onchange="monthlyPlanM2[this.dataset.code]=+this.value;renderScoreTable()" style="width:75px"></td>
+        <td class="num" style="color:${(+monthlyPlanM2[r.code]||0)-(r.runQtyM2)<0?'#e53935':'#388e3c'}">${(+monthlyPlanM2[r.code]||0)>0?fmt((+monthlyPlanM2[r.code]||0)-(r.runQtyM2),0):'—'}</td>
+        <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
+      </tr>`).join('');
+  }
 }
 
 function docColor(d){
@@ -1137,7 +1188,9 @@ window.addEventListener('message', e => {
     rmReq:    e.data.rmReq    || {},   // real imported Required Qty M1 per RM (kg), from MRP tool
     pmReq:    e.data.pmReq    || {},   // real imported Required Qty M1 per PM (units), from MRP tool
     rmReq2:   e.data.rmReq2   || {},   // real imported Required Qty M2 per RM (kg), from MRP tool
-    pmReq2:   e.data.pmReq2   || {}    // real imported Required Qty M2 per PM (units), from MRP tool
+    pmReq2:   e.data.pmReq2   || {},   // real imported Required Qty M2 per PM (units), from MRP tool
+    skuDocM1: e.data.skuDocM1 || {},   // authoritative Min(RM DOC,PM DOC) M1 per SKU, straight from MRP tool's SKU DOC tab
+    skuDocM2: e.data.skuDocM2 || {}    // authoritative Min(RM DOC,PM DOC) M2 per SKU, straight from MRP tool's SKU DOC tab
   };
   const badge = document.getElementById('mrpSyncBadge');
   if (badge) badge.classList.add('visible');
