@@ -806,9 +806,12 @@ function computeRows() {
     const hasReqData = mrpData?.skuHasReqData ? !!mrpData.skuHasReqData[code] : false;
 
     // Zero/blank Production Plan supply for that month — the SKU is excluded entirely
-    // from that month's view (not shown in Ranked, Blocked, or Awaiting Data).
-    const hasSupplyM1 = n(inputPlan[code]) > 0;
-    const hasSupplyM2 = n(inputPlanM2[code]) > 0;
+    // from that month's view (not shown in Ranked, Blocked, or Awaiting Data). This only
+    // applies once a Production Plan has actually been imported/entered for that month —
+    // if inputPlan/inputPlanM2 is still completely empty (nothing uploaded yet in the Input
+    // tab), don't treat every SKU as "zero supply"; just skip this gate until real data exists.
+    const hasSupplyM1 = Object.keys(inputPlan).length === 0 ? true : n(inputPlan[code]) > 0;
+    const hasSupplyM2 = Object.keys(inputPlanM2).length === 0 ? true : n(inputPlanM2[code]) > 0;
 
     let dataStateM1, dataStateM2;
     if (!hasSupplyM1) dataStateM1 = 'no-supply';
