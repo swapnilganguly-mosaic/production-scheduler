@@ -106,6 +106,8 @@ tr:last-child td{border-bottom:none}
   <div class="cfg-group"><label>Line Cap (kg/week):</label><input type="number" id="cfgLineCap" value="5000" min="0"></div>
   <div class="cfg-group"><label>Target FG DOC (days):</label><input type="number" id="cfgTargetFgDoc" value="30" min="1"></div>
   <div class="cfg-group"><label>Target RM/PM DOC:</label><input type="number" id="cfgTargetDoc" value="60" min="1"></div>
+  <div class="cfg-group"><label>RM Lead Time (days):</label><input type="number" id="cfgRmLeadTime" value="21" min="0" onchange="recompute()"></div>
+  <div class="cfg-group"><label>PM Lead Time (days):</label><input type="number" id="cfgPmLeadTime" value="30" min="0" onchange="recompute()"></div>
   <div class="cfg-group"><label>Horizon (weeks):</label><input type="number" id="cfgHorizon" value="8" min="1" max="52"></div>
   <div class="cfg-group"><label>Filter Class:</label>
     <select id="cfgClass" onchange="recompute()"><option value="">All</option><option>A</option><option>B</option><option>C</option></select>
@@ -175,7 +177,7 @@ tr:last-child td{border-bottom:none}
   </div>
   <div class="summary-row" id="summaryCards"></div>
 
-  <h3 style="margin:14px 0 8px;font-size:14px;color:#1e293b">Month 1 (M1) Score Table &mdash; drives Week 1-4 schedule</h3>
+  <h3 style="margin:14px 0 8px;font-size:14px;color:#1e293b">Month 1 (M1) &mdash; Ranked (Schedulable) &mdash; drives Week 1-4 schedule</h3>
   <div class="tbl-wrap">
     <table id="scoreTableM1">
       <thead><tr>
@@ -203,7 +205,26 @@ tr:last-child td{border-bottom:none}
     </table>
   </div>
 
-  <h3 style="margin:18px 0 8px;font-size:14px;color:#1e293b">Month 2 (M2) Score Table &mdash; drives Week 5-8 schedule</h3>
+  <h3 style="margin:18px 0 8px;font-size:13px;color:#991b1b">Month 1 (M1) &mdash; Blocked (Material Shortage)</h3>
+  <div class="tbl-wrap">
+    <table id="blockedTableM1">
+      <thead><tr>
+        <th>SKU Code</th><th>SKU Name</th><th>Bottleneck</th>
+        <th class="num">DOC (days)</th><th class="num">Lead Time (days)</th><th class="num">Shortfall (days)</th>
+      </tr></thead>
+      <tbody id="blockedBodyM1"></tbody>
+    </table>
+  </div>
+
+  <h3 style="margin:18px 0 8px;font-size:13px;color:#64748b">Month 1 (M1) &mdash; Awaiting Data</h3>
+  <div class="tbl-wrap">
+    <table id="awaitingTableM1">
+      <thead><tr><th>SKU Code</th><th>SKU Name</th><th>Status</th></tr></thead>
+      <tbody id="awaitingBodyM1"></tbody>
+    </table>
+  </div>
+
+  <h3 style="margin:18px 0 8px;font-size:14px;color:#1e293b">Month 2 (M2) &mdash; Ranked (Schedulable) &mdash; drives Week 5-8 schedule</h3>
   <div class="tbl-wrap">
     <table id="scoreTableM2">
       <thead><tr>
@@ -228,6 +249,25 @@ tr:last-child td{border-bottom:none}
         <th class="num">Line Cap</th>
       </tr></thead>
       <tbody id="scoreBodyM2"></tbody>
+    </table>
+  </div>
+
+  <h3 style="margin:18px 0 8px;font-size:13px;color:#991b1b">Month 2 (M2) &mdash; Blocked (Material Shortage)</h3>
+  <div class="tbl-wrap">
+    <table id="blockedTableM2">
+      <thead><tr>
+        <th>SKU Code</th><th>SKU Name</th><th>Bottleneck</th>
+        <th class="num">DOC (days)</th><th class="num">Lead Time (days)</th><th class="num">Shortfall (days)</th>
+      </tr></thead>
+      <tbody id="blockedBodyM2"></tbody>
+    </table>
+  </div>
+
+  <h3 style="margin:18px 0 8px;font-size:13px;color:#64748b">Month 2 (M2) &mdash; Awaiting Data</h3>
+  <div class="tbl-wrap">
+    <table id="awaitingTableM2">
+      <thead><tr><th>SKU Code</th><th>SKU Name</th><th>Status</th></tr></thead>
+      <tbody id="awaitingBodyM2"></tbody>
     </table>
   </div>
 
@@ -741,8 +781,49 @@ function computeRows() {
     const stratWt = jas.w;
     const mfM1 = minDocM1 !== null && minDocM1 != null ? Math.min(1, minDocM1 / targetDoc) : 0;
     const mfM2 = minDocM2 !== null && minDocM2 != null ? Math.min(1, minDocM2 / targetDoc) : 0;
-    const scoreM1 = urgencyM1 * stratWt * mfM1;
-    const scoreM2 = urgencyM2 * stratWt * mfM2;
+    const scoreM1raw = urgencyM1 * stratWt * mfM1;
+    const scoreM2raw = urgencyM2 * stratWt * mfM2;
+
+    // --- Feasibility gate: RM DOC / PM DOC vs their lead times (binary — no buffer) ---
+    // Prefer the RM-only/PM-only DOC broadcast straight from the MRP tool (authoritative,
+    // same source as the SKU DOC tab); fall back to this Scheduler's own local recompute
+    // only if the MRP tool isn't connected.
+    const rmLeadTime = n(document.getElementById('cfgRmLeadTime').value) || 0;
+    const pmLeadTime = n(document.getElementById('cfgPmLeadTime').value) || 0;
+    const rmDocGateM1 = mrpData?.skuRmDocM1 && mrpData.skuRmDocM1[code] !== undefined ? mrpData.skuRmDocM1[code] : m1Mat.rmDoc;
+    const pmDocGateM1 = mrpData?.skuPmDocM1 && mrpData.skuPmDocM1[code] !== undefined ? mrpData.skuPmDocM1[code] : m1Mat.pmDoc;
+    const rmDocGateM2 = mrpData?.skuRmDocM2 && mrpData.skuRmDocM2[code] !== undefined ? mrpData.skuRmDocM2[code] : m2Mat.rmDoc;
+    const pmDocGateM2 = mrpData?.skuPmDocM2 && mrpData.skuPmDocM2[code] !== undefined ? mrpData.skuPmDocM2[code] : m2Mat.pmDoc;
+    const blockedM1 = (rmDocGateM1 != null && rmDocGateM1 < rmLeadTime) || (pmDocGateM1 != null && pmDocGateM1 < pmLeadTime);
+    const blockedM2 = (rmDocGateM2 != null && rmDocGateM2 < rmLeadTime) || (pmDocGateM2 != null && pmDocGateM2 < pmLeadTime);
+    const blockedByM1 = (rmDocGateM1 != null && rmDocGateM1 < rmLeadTime) ? { kind: 'RM', doc: rmDocGateM1, leadTime: rmLeadTime } :
+                        (pmDocGateM1 != null && pmDocGateM1 < pmLeadTime) ? { kind: 'PM', doc: pmDocGateM1, leadTime: pmLeadTime } : null;
+    const blockedByM2 = (rmDocGateM2 != null && rmDocGateM2 < rmLeadTime) ? { kind: 'RM', doc: rmDocGateM2, leadTime: rmLeadTime } :
+                        (pmDocGateM2 != null && pmDocGateM2 < pmLeadTime) ? { kind: 'PM', doc: pmDocGateM2, leadTime: pmLeadTime } : null;
+
+    // Has Novacore's Required Qty actually been imported for this SKU? (one flag covers
+    // both months, since one file upload sets both M1 and M2 together for a material.)
+    const hasReqData = mrpData?.skuHasReqData ? !!mrpData.skuHasReqData[code] : false;
+
+    // Zero/blank Production Plan supply for that month — the SKU is excluded entirely
+    // from that month's view (not shown in Ranked, Blocked, or Awaiting Data).
+    const hasSupplyM1 = n(inputPlan[code]) > 0;
+    const hasSupplyM2 = n(inputPlanM2[code]) > 0;
+
+    let dataStateM1, dataStateM2;
+    if (!hasSupplyM1) dataStateM1 = 'no-supply';
+    else if (!hasReqData) dataStateM1 = 'awaiting';
+    else if (blockedM1) dataStateM1 = 'blocked';
+    else dataStateM1 = 'ok';
+    if (!hasSupplyM2) dataStateM2 = 'no-supply';
+    else if (!hasReqData) dataStateM2 = 'awaiting';
+    else if (blockedM2) dataStateM2 = 'blocked';
+    else dataStateM2 = 'ok';
+
+    // Only fully-feasible, fully-scored SKUs carry a real score; Blocked/Awaiting/No-supply
+    // read as 0 so they can never rank above (or be confused with) a genuinely scored SKU.
+    const scoreM1 = dataStateM1 === 'ok' ? scoreM1raw : 0;
+    const scoreM2 = dataStateM2 === 'ok' ? scoreM2raw : 0;
 
     result.push({
       code, name, cls: jas.c, priority: jas.p, packSizeKg,
@@ -754,6 +835,7 @@ function computeRows() {
       pmStockM2: m2Mat.pmStockDisplay, pmReq30M2: m2Mat.pmReq30Display, pmDocM2: m2Mat.pmDoc,
       minDocM1, minDocM2,
       mfM1, mfM2, scoreM1, scoreM2,
+      dataStateM1, dataStateM2, blockedByM1, blockedByM2,
       runQtyM1: drrM1 * 13, runQtyM2: drrM2 * 13
     });
   });
@@ -784,9 +866,10 @@ function renderScoreTable() {
 
   // Two independent tables, each sorted by its own month's Score — M1 table drives the
   // Week 1-4 schedule ordering, M2 table drives Week 5-8, so the two rankings can (and
-  // normally will) differ per SKU.
-  const filteredM1=[...filtered].sort((a,b)=>b.scoreM1-a.scoreM1);
-  const filteredM2=[...filtered].sort((a,b)=>b.scoreM2-a.scoreM2);
+  // normally will) differ per SKU. Only fully-feasible ("ok") SKUs appear in the Ranked
+  // table — Blocked/Awaiting Data/No-supply SKUs are rendered separately below instead.
+  const filteredM1=[...filtered].filter(r=>r.dataStateM1==='ok').sort((a,b)=>b.scoreM1-a.scoreM1);
+  const filteredM2=[...filtered].filter(r=>r.dataStateM2==='ok').sort((a,b)=>b.scoreM2-a.scoreM2);
 
   const tbodyM1=document.getElementById('scoreBodyM1');
   if(!filteredM1.length){
@@ -855,6 +938,42 @@ function renderScoreTable() {
         <td class="num"><input type="number" min="0" step="1000" value="${lineCap[r.code]||10000}" data-code="${r.code}" onchange="lineCap[this.dataset.code]=+this.value" style="width:60px"></td>
       </tr>`).join('');
   }
+
+  // Blocked (material shortage) and Awaiting Data buckets — "no-supply" SKUs (zero/blank
+  // Production Plan quantity that month) are dropped from every bucket entirely, per month.
+  renderSideBucket('blockedBodyM1', filtered.filter(r=>r.dataStateM1==='blocked'), 'blockedByM1');
+  renderSideBucket('blockedBodyM2', filtered.filter(r=>r.dataStateM2==='blocked'), 'blockedByM2');
+  renderAwaitingBucket('awaitingBodyM1', filtered.filter(r=>r.dataStateM1==='awaiting'));
+  renderAwaitingBucket('awaitingBodyM2', filtered.filter(r=>r.dataStateM2==='awaiting'));
+}
+
+function renderSideBucket(tbodyId, list, blockedByField){
+  const tbody=document.getElementById(tbodyId);
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="6" class="empty" style="padding:14px"><span style="color:#94a3b8;font-size:12px">None</span></td></tr>'; return; }
+  const fmt=(v,d=1)=>v==null?'—':(+v).toFixed(d);
+  tbody.innerHTML=list.map(r=>{
+    const b=r[blockedByField];
+    const shortfall = b ? (b.doc - b.leadTime) : null;
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px">${r.code}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'—'}</td>
+      <td>${b?b.kind:'—'}</td>
+      <td class="num">${b?fmt(b.doc,1):'—'}</td>
+      <td class="num">${b?fmt(b.leadTime,0):'—'}</td>
+      <td class="num" style="color:#e53935">${shortfall!=null?fmt(shortfall,1):'—'}</td>
+    </tr>`;
+  }).join('');
+}
+function renderAwaitingBucket(tbodyId, list){
+  const tbody=document.getElementById(tbodyId);
+  if(!tbody) return;
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="3" class="empty" style="padding:14px"><span style="color:#94a3b8;font-size:12px">None</span></td></tr>'; return; }
+  tbody.innerHTML=list.map(r=>`<tr>
+    <td style="font-family:monospace;font-size:11px">${r.code}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.name}">${r.name||'—'}</td>
+    <td style="color:#94a3b8">Not scored &mdash; Required Qty not yet received</td>
+  </tr>`).join('');
 }
 
 function docColor(d){
@@ -916,8 +1035,10 @@ function generateSchedule2Month(){
     });
   }
 
-  const m1Order = [...rows].sort((a,b)=>b.scoreM1-a.scoreM1);
-  const m2Order = [...rows].sort((a,b)=>b.scoreM2-a.scoreM2);
+  // Only feasible ("ok") SKUs are eligible to be scheduled that month — Blocked, Awaiting
+  // Data, and No-supply SKUs never receive a week allocation.
+  const m1Order = rows.filter(r=>r.dataStateM1==='ok').sort((a,b)=>b.scoreM1-a.scoreM1);
+  const m2Order = rows.filter(r=>r.dataStateM2==='ok').sort((a,b)=>b.scoreM2-a.scoreM2);
   allocatePhase(m1Order, 'runQtyM1', 0, wpm);
   allocatePhase(m2Order, 'runQtyM2', wpm, wks);
 
@@ -1190,7 +1311,12 @@ window.addEventListener('message', e => {
     rmReq2:   e.data.rmReq2   || {},   // real imported Required Qty M2 per RM (kg), from MRP tool
     pmReq2:   e.data.pmReq2   || {},   // real imported Required Qty M2 per PM (units), from MRP tool
     skuDocM1: e.data.skuDocM1 || {},   // authoritative Min(RM DOC,PM DOC) M1 per SKU, straight from MRP tool's SKU DOC tab
-    skuDocM2: e.data.skuDocM2 || {}    // authoritative Min(RM DOC,PM DOC) M2 per SKU, straight from MRP tool's SKU DOC tab
+    skuDocM2: e.data.skuDocM2 || {},   // authoritative Min(RM DOC,PM DOC) M2 per SKU, straight from MRP tool's SKU DOC tab
+    skuRmDocM1: e.data.skuRmDocM1 || {}, // RM-only bottleneck DOC M1 per SKU (feasibility gate)
+    skuPmDocM1: e.data.skuPmDocM1 || {}, // PM-only bottleneck DOC M1 per SKU (feasibility gate)
+    skuRmDocM2: e.data.skuRmDocM2 || {}, // RM-only bottleneck DOC M2 per SKU (feasibility gate)
+    skuPmDocM2: e.data.skuPmDocM2 || {}, // PM-only bottleneck DOC M2 per SKU (feasibility gate)
+    skuHasReqData: e.data.skuHasReqData || {} // true if Required Qty has been imported for this SKU (any material)
   };
   const badge = document.getElementById('mrpSyncBadge');
   if (badge) badge.classList.add('visible');
